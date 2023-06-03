@@ -185,8 +185,6 @@ def main():
 
         DatasetTrain = DrugOmicsDataset(Trainset, omics_dataset, smiles_list, modelname, EVAL = False)
         DatasetValid = DrugOmicsDataset(Validset, omics_dataset, smiles_list, modelname, EVAL = True)
-        # print('DatasetTrain len =',len(DatasetTrain))
-        # print('Trainset len =',len(Trainset))
         trainloader = get_dataloader(DatasetTrain, modelname, batch_size=batch_size)
         validloader = get_dataloader(DatasetValid, modelname)
 
@@ -204,8 +202,6 @@ def main():
                 input_size_list=omics_dataset.input_size,
                 args=args,
             )
-            # if num_devices > 1:
-            #     model = nn.parallel.DistributedDataParallel(model)
             
         if optimizer is None:
             optimizer = optim.AdamW(model.parameters(),lr=lr, weight_decay=weight_decay)
@@ -227,7 +223,6 @@ def main():
             printloss = 0.0
             print(f'Epoch:{num_epoch}/{max_epoch}')
             status.update({
-                    # 'repeat':repeat,
                     'fold':fold,
                     'epoch':num_epoch
                 })
@@ -324,6 +319,5 @@ def main():
 
 if __name__ == '__main__':
     torch.cuda.empty_cache()
-    # os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
     main()
 
