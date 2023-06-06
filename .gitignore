@@ -1,3 +1,7 @@
+# Global
 __pycache__/
 test/
 data/
+
+# On MacBook
+env_setup.sh
