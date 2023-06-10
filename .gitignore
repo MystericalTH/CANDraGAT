@@ -3,6 +3,6 @@ __pycache__/
 test/
 data/
 slurm-*.out
-
+*.log
 # On MacBook
 env_setup.sh
