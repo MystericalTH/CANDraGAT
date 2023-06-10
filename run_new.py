@@ -14,7 +14,7 @@ from argparse import ArgumentParser
 def parse_args():
     model_names = ["AttentiveFP", "GAT", "GCN","FragAttentiveFP"]
     parser = ArgumentParser(description='ablation_analysis')
-    parser.add_argument('--modelname', dest='modelname', action='store', default = "AttentiveFP",
+    parser.add_argument('--modelname', dest='modelname', action='store', default = "FragAttentiveFP",
                         choices=model_names, help="AttentiveFP or GAT or GCN")
     parser.add_argument('--task', dest='task', default='regr',
                         action="store", help='classification or regression (default: \'regr\')', choices=['clas','regr'])
@@ -77,8 +77,6 @@ def main():
 
     omics_dataset = OmicsDataset(cl_list, mut = Mut_df, expr = Expr_df, meth = Meth_df, cnv = CNV_df)
     outtext_list = [enable_mut, enable_expr, enable_meth, enable_cnv]
-    
-    assert len(drugsens_test) == len(_drugsens_test)
 
 
     if args['debug']:
