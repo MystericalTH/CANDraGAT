@@ -50,7 +50,7 @@ def get_trial_config(trial: optuna.Trial) -> Dict[str, Union[float, int]]:
     return {
         # 'batchsize': 2**(trial.suggest_int('batchsize', 2,5)),
         'drop_rate': trial.suggest_float('drop_rate',0.1,0.9,step=0.05),
-        'lr': trial.suggest_float("lr", 5e-5, 1e-3, log=True),
+        'lr': trial.suggest_categorical("lr", [1e-3, 5e-4, 1e-4, 5e-5, 1e-5]),
         'WeightDecay': trial.suggest_uniform('WeightDecay',1e-7, 1e-5),
         'omics_output_size': trial.suggest_int('omics_output_size',100,300,step=25),
         'drug_output_size': trial.suggest_int('drug_output_size',100,300,step=25)
