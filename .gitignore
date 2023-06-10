@@ -2,6 +2,7 @@
 __pycache__/
 test/
 data/
+slurm-*.out
 
 # On MacBook
 env_setup.sh
