@@ -17,8 +17,10 @@ class BasicCriterion(object):
     def compute(self, answer, label):
         raise NotImplementedError("Base class")
     
-    def __call__(self,answer, label):
-        return round(self.compute(answer, label),4)
+    def __call__(self,answer, label, requires_backward = False):
+        if requires_backward:
+            return self.compute(answer, label)
+        return round(self.compute(answer, label).item(), 4)
     
     def __len__(self):
         return 1
@@ -35,7 +37,8 @@ class GMeans(BasicCriterion):
         answer = np.array([1 if i >= 0.5 else 0 for i in answer])
         gmeans = geometric_mean_score(answer, label)
         return gmeans
-
+    def __call__(self,answer, label):
+        return round(self.compute(answer, label), 4)
 class AUCPR(BasicCriterion):
     def __init__(self):
         super(AUCPR, self).__init__()
@@ -47,7 +50,7 @@ class AUCPR(BasicCriterion):
         answer = torch.Tensor(answer)
         precision,recall,_, = binary_precision_recall_curve(answer, label)
         aucpr_all = -np.trapz(precision,recall)
-        return aucpr_all.item()
+        return aucpr_all
 
 class Accuracy(BasicCriterion):                      
     def __init__(self):
@@ -59,7 +62,7 @@ class Accuracy(BasicCriterion):
         label = torch.LongTensor(label)
         answer = torch.Tensor(answer)
         accuracy = binary_accuracy(answer, label)
-        return accuracy.item()
+        return accuracy
 
 class Balanced_Accuracy(BasicCriterion):                      
     def __init__(self):
@@ -73,7 +76,7 @@ class Balanced_Accuracy(BasicCriterion):
         recall = binary_recall(answer, label)
         specificity = binary_specificity(answer, label)
         bal_accuracy = (recall+specificity)/2
-        return bal_accuracy.item()
+        return bal_accuracy
 
 class AUROC(BasicCriterion):
     def __init__(self):
@@ -85,7 +88,7 @@ class AUROC(BasicCriterion):
         label = torch.LongTensor(label)
         answer = torch.Tensor(answer)
         auroc = binary_auroc(answer, label)
-        return auroc.item()
+        return auroc
     
 class MCC(BasicCriterion):
     def __init__(self):
@@ -97,7 +100,7 @@ class MCC(BasicCriterion):
         label = torch.LongTensor(label)
         answer = torch.Tensor(answer)
         mcc = binary_matthews_corrcoef(answer, label)
-        return mcc.item()
+        return mcc
 
 class Kappa(BasicCriterion):
     def __init__(self):
@@ -109,7 +112,7 @@ class Kappa(BasicCriterion):
         label = torch.LongTensor(label)
         answer = torch.Tensor(answer)
         kappa = binary_cohen_kappa(answer, label)
-        return kappa.item()
+        return kappa
 
 class BCE(BasicCriterion):
     def __init__(self):
@@ -121,7 +124,7 @@ class BCE(BasicCriterion):
         label = torch.Tensor(label)
         answer = torch.Tensor(answer)
         bce = F.binary_cross_entropy(answer, label, reduction='mean')
-        return bce.item()
+        return bce
 
 class F1(BasicCriterion):
     def __init__(self):
@@ -133,7 +136,7 @@ class F1(BasicCriterion):
         label = torch.LongTensor(label)
         answer = torch.Tensor(answer)
         f1 = binary_f1_score(answer, label)
-        return f1.item()
+        return f1
 
 class Precision(BasicCriterion):
     def __init__(self):
@@ -145,7 +148,7 @@ class Precision(BasicCriterion):
         label = torch.LongTensor(label)
         answer = torch.Tensor(answer)
         precision = binary_precision(answer,label)
-        return precision.item()
+        return precision
 
 class Recall(BasicCriterion):
     def __init__(self):
@@ -157,7 +160,7 @@ class Recall(BasicCriterion):
         label = torch.LongTensor(label)
         answer = torch.Tensor(answer)
         recall = binary_recall(answer, label)
-        return recall.item()
+        return recall
     
 class Specificity(BasicCriterion):
     def __init__(self):
@@ -169,7 +172,7 @@ class Specificity(BasicCriterion):
         label = torch.LongTensor(label)
         answer = torch.Tensor(answer)
         specificity = binary_specificity(answer, label)
-        return specificity.item()
+        return specificity
 
 # import numpy as np
 # import torch
@@ -222,7 +225,7 @@ class Specificity(BasicCriterion):
 #         label = torch.Tensor(label)
 
 #         BCE = F.binary_cross_entropy(answer, label, reduction='mean')
-#         return BCE.item()
+#         return BCE
 
 # class F1(BasicCriterion):
 #     def __init__(self):
@@ -277,7 +280,7 @@ class RMSE(BasicCriterion):
         answer = torch.Tensor(answer).squeeze(-1)
         label = torch.Tensor(label)
         RMSE = mean_squared_error(answer, label).sqrt()
-        return RMSE.item()
+        return RMSE
 
 
 class MAE(BasicCriterion):
@@ -291,7 +294,7 @@ class MAE(BasicCriterion):
         label = torch.Tensor(label)
         #print("Size for MAE")
         MAE = mean_absolute_error(answer, label)
-        return MAE.item()
+        return MAE
 
 
 class MSE(BasicCriterion):
@@ -305,7 +308,7 @@ class MSE(BasicCriterion):
         label = torch.Tensor(label)
         #print("Size for MAE")
         MSE = mean_squared_error(answer, label)
-        return MSE.item()
+        return MSE
 
 
 class PCC(BasicCriterion):
@@ -319,7 +322,7 @@ class PCC(BasicCriterion):
         label = torch.Tensor(label)
         #print("Size for MAE")
         pcc = pearson_corrcoef(answer, label)
-        return pcc.item()
+        return pcc
 
 
 class R2(BasicCriterion):
@@ -333,7 +336,7 @@ class R2(BasicCriterion):
         label = torch.Tensor(label)
         #print("Size for MAE")
         r_squared = r2_score(answer, label)
-        return r_squared.item()
+        return r_squared
 
 
 class SRCC(BasicCriterion):
@@ -347,4 +350,4 @@ class SRCC(BasicCriterion):
         answer = torch.Tensor(answer)
         label = torch.Tensor(label)
         srcc = spearman_corrcoef(answer, label)
-        return srcc.item()
+        return srcc

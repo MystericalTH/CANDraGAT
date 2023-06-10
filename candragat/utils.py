@@ -50,7 +50,7 @@ def compute_confidence_interval(data):
     return m, pm
 
 def write_result_files(report_metrics,summaryfile):
-    col = ['experiment_name','start_time','end_time','elapsed_time','mutation', 'gene_expression', 'methylation', 'copy_number_variation']
+    col = ['experiment_name','note','start_time','end_time','elapsed_time','mutation', 'gene_expression', 'methylation', 'copy_number_variation']
     writer = csv.writer(summaryfile)
     multiheader = [(x,None) for x in col] + list(product([x.name for x in report_metrics],['mean','interval']))
     for i in range(2):

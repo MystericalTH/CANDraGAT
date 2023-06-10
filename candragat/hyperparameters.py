@@ -109,7 +109,7 @@ def candragat_tuning(trial:optuna.Trial, drugsens_df, omics_dataset, smiles_list
                 optimizer.step()
             
             # trainmseloss = (cum_loss/len(trainloader)).item()
-        metric = BCE() if args.classify else MSE()
+        metric = BCE() if args['task']=='clas' else MSE()
         results = Validation(validloader, model, metric, modelname, CPU)[0]
         validmseloss.append(results[metric.name])
     

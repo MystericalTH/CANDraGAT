@@ -28,6 +28,8 @@ def parse_args():
                         action="store_false", help='enable copy number variation or not')
     parser.add_argument('--disable_drug', dest='enable_drug', default=True,
                         action="store_false", help='enable drug feature or not')
+    parser.add_argument('--note', dest='note', default='',
+                        action="store", help='a string of note to display in summary file')
     parser.add_argument('-rs', '--resume', dest='hyperpath', help='load hyperparameter file, enter hyperparameter directory')
     parser.add_argument('--debug', default=False, action="store_true", dest='debug', help='debug file/test run')
     parser.add_argument('-l', '--load_hyper', required=False,nargs=2, dest='hyperpath', help='load hyperparameter file, enter hyperparameter directory')
@@ -50,6 +52,7 @@ def main():
 
     task = args['task']
     modelname = args['modelname']
+    note = args['note']
 
     CPU = torch.device('cpu')
     CUDA = torch.device('cuda')
@@ -60,22 +63,14 @@ def main():
     enable_mut, enable_expr, enable_meth, enable_cnv = args['enable_mut'], args['enable_expr'], args['enable_meth'], args['enable_cnv']
     features_dir = "./data/datasets/features"
     drugsens_dir = "./data/datasets/sensitivity/stack"
-    Mut_df = pd.read_csv(features_dir+'Mut.csv', index_col=0, header=0) 
-    # if not enable_mut: 
-    #     Mut_df = pd.DataFrame(0, index=np.arange(len(Mut_df)), columns=Mut_df.columns)
-    Expr_df = pd.read_csv(features_dir+'GeneExp.csv', index_col=0, header=0) 
-    # if not enable_expr: 
-    #     Expr_df = pd.DataFrame(0, index=np.arange(len(Expr_df)), columns=Expr_df.columns)
-    Meth_df = pd.read_csv(features_dir+'Meth.csv', index_col=0, header=0) 
-    # if not enable_meth: 
-    #     Meth_df = pd.DataFrame(0, index=np.arange(len(Meth_df)), columns=Meth_df.columns)
-    CNV_df = pd.read_csv(features_dir+'GeneCN.csv', index_col=0, header=0) 
-    # if not enable_cnv: 
-    #     CNV_df = pd.DataFrame(0, index=np.arange(len(CNV_df)), columns=CNV_df.columns)
+    Mut_df = pd.read_csv(features_dir + '/' + 'Mut.csv', index_col=0, header=0) 
+    Expr_df = pd.read_csv(features_dir + '/' + 'GeneExp.csv', index_col=0, header=0) 
+    Meth_df = pd.read_csv(features_dir + '/' + 'Meth.csv', index_col=0, header=0) 
+    CNV_df = pd.read_csv(features_dir + '/' + 'GeneCN.csv', index_col=0, header=0) 
     print('Omics data loaded.')
     
-    _drugsens_tv = pd.read_csv(drugsens_dir + '/' + args['task'] + '/' + "DrugSens-Train.csv", index_col = 0, header = 0)
-    _drugsens_test = pd.read_csv(drugsens_dir + '/' + args['task'] + '/' + "DrugSens-Test.csv", index_col = 0, header = 0)
+    _drugsens_tv = pd.read_csv(drugsens_dir + '/' + args['task'] + '/' + "DrugSens-Train.csv", header = 0)
+    _drugsens_test = pd.read_csv(drugsens_dir + '/' + args['task'] + '/' + "DrugSens-Test.csv", header = 0)
     smiles_list, cl_list, drugsens = DrugSensTransform(pd.concat([_drugsens_tv, _drugsens_test], axis=0))
     drugsens_tv = drugsens.iloc[:len(_drugsens_tv)]
     drugsens_test = drugsens.iloc[len(_drugsens_tv):]
@@ -231,10 +226,10 @@ def main():
                 [OmicsInput, DrugInput], Label = Data
                 DrugInput = DrugInputToDevice(DrugInput, modelname, CUDA)
                 OmicsInput = [tensor.to(CUDA) for tensor in OmicsInput]
-                Label = Label.squeeze(-1).to(CUDA)    # [batch, task]
+                # Label = Label.squeeze(-1).to(CUDA)    # [batch, task]
                 output = model([OmicsInput, DrugInput])    # [batch, output_size]
 
-                loss = criterion(output, Label).float()
+                loss = criterion(output.to(CPU), Label.to(CPU), requires_backward = True)
                 
                 cum_loss += loss.detach()
                 printloss += loss.detach()
@@ -302,9 +297,10 @@ def main():
         with open(summaryfilepath, 'w') as summaryfile:
             write_result_files(report_metrics,summaryfile)
     with open(summaryfilepath, 'a') as outfile:
-        outtext_list.insert(1,start_time_formatted)
-        outtext_list.insert(2,end_time_formatted)
-        outtext_list.insert(3,str(elapsed_time).split('.')[0])
+        outtext_list.insert(1,note)
+        outtext_list.insert(2,start_time_formatted)
+        outtext_list.insert(3,end_time_formatted)
+        outtext_list.insert(4,str(elapsed_time).split('.')[0])
         output_writer = csv.writer(outfile,delimiter = ',')
         output_writer.writerow(outtext_list)
 

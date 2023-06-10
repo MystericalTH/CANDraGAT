@@ -140,7 +140,7 @@ class MolPredFragFPv8(nn.Module):
             layers=mol_layers,
             FP_size=FP_size,
             droprate=drop_rate
-        )  # MolEmbedding module can be used repeatedly
+        )  # MolEmbedding module can be enabled repeatedly
         self.Classifier = DNN(
             input_size=4*FP_size,
             output_size=output_size,
@@ -153,7 +153,7 @@ class MolPredFragFPv8(nn.Module):
             layers=atom_layers,
             droprate=drop_rate
         )  # For Junction Tree
-        # self.InformationFuser =
+        # self.InformationFenabler =
         self._name = 'FragAttentiveFP'
     @property
     def _device(self):
@@ -187,8 +187,8 @@ class MolPredFragFPv8(nn.Module):
             atom_features, bond_features, atom_neighbor_list_changed, bond_neighbor_list_changed)
         mol_FP1, activated_mol_FP1 = self.MolEmbedding(atom_FP, frag_mask1)
         mol_FP2, activated_mol_FP2 = self.MolEmbedding(atom_FP, frag_mask2)
-        # mol_FP1, mol_FP2 are used to input the DNN module.
-        # activated_mol_FP1 and activated_mol_FP2 are used to calculate the mol_FP
+        # mol_FP1, mol_FP2 are enabled to input the DNN module.
+        # activated_mol_FP1 and activated_mol_FP2 are enabled to calculate the mol_FP
         # size: [batch_size, FP_size]
         ##################################################################################
         # Junction Tree Construction
@@ -397,10 +397,9 @@ class MultiOmicsMolNet(nn.Module):
         self.cnv_nn = CNVNet(input_size_list[3], self.omics_output_size, drop_rate)
         self.drug_nn = drug_nn
         self.args = args
-        self.classify = args.classify
 
         self.omics_fc = nn.Sequential(
-            nn.Linear(self.omics_output_size*(self.args.use_mut + self.args.use_expr + self.args.use_meth + self.args.use_cnv), 
+            nn.Linear(self.omics_output_size*(self.args['enable_mut'] + self.args['enable_expr'] + self.args['enable_meth'] + self.args['enable_cnv']), 
                         self.omics_output_size),
             nn.LeakyReLU()
         )
@@ -420,29 +419,29 @@ class MultiOmicsMolNet(nn.Module):
         
         MultiOmics_layer = []
 
-        if self.args.use_mut:
+        if self.args['enable_mut']:
             Mut_layer = self.mut_nn(Mut)
             MultiOmics_layer.append(Mut_layer)
-        if self.args.use_expr:
+        if self.args['enable_expr']:
             Expr_layer = self.expr_nn(Expr)
             MultiOmics_layer.append(Expr_layer)
-        if self.args.use_meth:
+        if self.args['enable_meth']:
             Meth_layer = self.meth_nn(Meth)
             MultiOmics_layer.append(Meth_layer)
-        if self.args.use_cnv:
+        if self.args['enable_cnv']:
             CNV_layer = self.cnv_nn(CNV)
             MultiOmics_layer.append(CNV_layer)
             
         MultiOmics_layer = torch.cat(MultiOmics_layer, dim=1)
         preout_layer = self.omics_fc(MultiOmics_layer)
 
-        if self.args.use_drug:
+        if self.args['enable_drug']:
             Drug_layer = self.drug_nn(Drug)
             preout_layer = torch.cat([preout_layer,Drug_layer], dim=1)
 
         prediction = self.out(preout_layer)
 
-        if self.classify:
+        if self.args['task'] == 'clas':
             prediction = torch.sigmoid(prediction)
 
         return prediction
