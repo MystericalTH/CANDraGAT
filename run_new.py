@@ -288,7 +288,7 @@ def main():
 
     print('Writing Output...')
 
-    resultsdf.to_csv(f'{RUN_DIR}/ExperimentSummary.csv')
+    resultsdf.to_csv(f'{RUN_DIR}/ExperimentSummary.csv', index=False)
 
     summaryfilepath = f'{resultfolder}/{modelname}/{prediction_task}/ResultSummarySheet.csv'
     if not os.path.exists(summaryfilepath):
