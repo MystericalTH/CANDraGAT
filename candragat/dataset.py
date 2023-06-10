@@ -6,7 +6,7 @@ from torch_geometric.loader import DataLoader as PyGDataLoader
 from candragat.utils import graph_collate_fn
 import pandas as pd
 
-def DrugsensTransform(drugsens_df:pd.DataFrame):
+def DrugSensTransform(drugsens_df:pd.DataFrame):
     smiles_list = drugsens_df['SMILES'].unique().tolist()
     cl_list = drugsens_df['cell_line'].unique().tolist()
     drugsens_new_df = drugsens_df.copy()

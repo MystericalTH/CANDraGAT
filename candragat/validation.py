@@ -1,5 +1,5 @@
 import torch
-from candragat.utils import mapDrugDEVICE
+from candragat.utils import DrugInputToDevice
 
 def Validation(validloader, model, metrics, modelname, DEVICE):
     model.eval().to(DEVICE)
@@ -9,7 +9,7 @@ def Validation(validloader, model, metrics, modelname, DEVICE):
     for ii, Data in enumerate(validloader):
 
         [ValidOmicsInput, ValidDrugInput], ValidLabel = Data
-        ValidDrugInput = mapDrugDEVICE(ValidDrugInput, modelname, DEVICE)
+        ValidDrugInput = DrugInputToDevice(ValidDrugInput, modelname, DEVICE)
         ValidOmicsInput = [tensor.to(DEVICE) for tensor in ValidOmicsInput]
 
         if modelname == 'FragAttentiveFP':

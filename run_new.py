@@ -1,6 +1,5 @@
 from candragat import *
 
-import argparse
 import arrow
 import torch
 from torch import nn, optim
@@ -10,33 +9,36 @@ import pandas as pd
 import numpy as np
 import json
 import os
+from argparse import ArgumentParser
 
 def parse_args():
     model_names = ["AttentiveFP", "GAT", "GCN","FragAttentiveFP"]
-    parser = argparse.ArgumentParser(description='ablation_analysis')
+    parser = ArgumentParser(description='ablation_analysis')
     parser.add_argument('--modelname', dest='modelname', action='store', default = "AttentiveFP",
                         choices=model_names, help="AttentiveFP or GAT or GCN")
-    parser.add_argument('--no_mut', dest='use_mut', default=True,
-                        action="store_false", help='use gene mutation or not')
-    parser.add_argument('--no_expr', dest='use_expr', default=True,
-                        action="store_false", help='use gene expression or not')
-    parser.add_argument('--no_methy', dest='use_meth', default=True,
-                        action="store_false", help='use methylation or not')
-    parser.add_argument('--no_cnv', dest='use_cnv', default=True,
-                        action="store_false", help='use copy number variation or not')
-    parser.add_argument('--no_drug', dest='use_drug', default=True,
-                        action="store_false", help='use drug feature or not')
-    parser.add_argument('-c','--classify', dest='classify', default=False,
-                        action="store_true", help='flag this to perform classification task')
+    parser.add_argument('--task', dest='task', default='regr',
+                        action="store", help='classification or regression (default: \'regr\')', choices=['clas','regr'])
+    parser.add_argument('--disable_mut', dest='enable_mut', default=True,
+                        action="store_false", help='enable gene mutation or not')
+    parser.add_argument('--disable_expr', dest='enable_expr', default=True,
+                        action="store_false", help='enable gene expression or not')
+    parser.add_argument('--disable_methy', dest='enable_meth', default=True,
+                        action="store_false", help='enable methylation or not')
+    parser.add_argument('--disable_cnv', dest='enable_cnv', default=True,
+                        action="store_false", help='enable copy number variation or not')
+    parser.add_argument('--disable_drug', dest='enable_drug', default=True,
+                        action="store_false", help='enable drug feature or not')
     parser.add_argument('-rs', '--resume', dest='hyperpath', help='load hyperparameter file, enter hyperparameter directory')
     parser.add_argument('--debug', default=False, action="store_true", dest='debug', help='debug file/test run')
     parser.add_argument('-l', '--load_hyper', required=False,nargs=2, dest='hyperpath', help='load hyperparameter file, enter hyperparameter directory')
 
-    args = parser.parse_args()
+    args = vars(parser.parse_args())
+
     return args
 
 
 def main():
+    
     args = parse_args()
 
     start_time = arrow.now()
@@ -45,13 +47,9 @@ def main():
 
     set_base_seed(42)
 
-    global ckpt_dir, max_epoch, max_tuning_epoch, device
-    global use_mut, use_expr, use_meth, use_cnv, modelname, classify
-    global status
 
-
-    classify = args.classify
-    modelname = args.modelname
+    task = args['task']
+    modelname = args['modelname']
 
     CPU = torch.device('cpu')
     CUDA = torch.device('cuda')
@@ -59,40 +57,36 @@ def main():
 
     # ------ Loading Dataset  ------
 
-    use_mut, use_expr, use_meth, use_cnv = args.use_mut, args.use_expr, args.use_meth, args.use_cnv
-    dataset_dir = "./data/"
-    Mut_df = pd.read_csv(dataset_dir+'Mut_prep.csv', index_col=0, header=0) 
-    if not use_mut: 
-        Mut_df = pd.DataFrame(0, index=np.arange(len(Mut_df)), columns=Mut_df.columns)
-    Expr_df = pd.read_csv(dataset_dir+'GeneExp_prep.csv', index_col=0, header=0) 
-    if not use_expr: 
-        Expr_df = pd.DataFrame(0, index=np.arange(len(Expr_df)), columns=Expr_df.columns)
-    Meth_df = pd.read_csv(dataset_dir+'Meth_prep.csv', index_col=0, header=0) 
-    if not use_meth: 
-        Meth_df = pd.DataFrame(0, index=np.arange(len(Meth_df)), columns=Meth_df.columns)
-    CNV_df = pd.read_csv(dataset_dir+'GeneCN_prep.csv', index_col=0, header=0) 
-    if not use_cnv: 
-        CNV_df = pd.DataFrame(0, index=np.arange(len(CNV_df)), columns=CNV_df.columns)
+    enable_mut, enable_expr, enable_meth, enable_cnv = args['enable_mut'], args['enable_expr'], args['enable_meth'], args['enable_cnv']
+    features_dir = "./data/datasets/features"
+    drugsens_dir = "./data/datasets/sensitivity/stack"
+    Mut_df = pd.read_csv(features_dir+'Mut.csv', index_col=0, header=0) 
+    # if not enable_mut: 
+    #     Mut_df = pd.DataFrame(0, index=np.arange(len(Mut_df)), columns=Mut_df.columns)
+    Expr_df = pd.read_csv(features_dir+'GeneExp.csv', index_col=0, header=0) 
+    # if not enable_expr: 
+    #     Expr_df = pd.DataFrame(0, index=np.arange(len(Expr_df)), columns=Expr_df.columns)
+    Meth_df = pd.read_csv(features_dir+'Meth.csv', index_col=0, header=0) 
+    # if not enable_meth: 
+    #     Meth_df = pd.DataFrame(0, index=np.arange(len(Meth_df)), columns=Meth_df.columns)
+    CNV_df = pd.read_csv(features_dir+'GeneCN.csv', index_col=0, header=0) 
+    # if not enable_cnv: 
+    #     CNV_df = pd.DataFrame(0, index=np.arange(len(CNV_df)), columns=CNV_df.columns)
     print('Omics data loaded.')
-    if classify:
-         _drugsens_tv = pd.read_csv(dataset_dir + "DrugSens_train_CDG_binary.csv", index_col = 0, header = 0)
-         _drugsens_test = pd.read_csv(dataset_dir + "DrugSens_test_CDG_binary.csv", index_col = 0, header = 0)
-    else:
-        _drugsens_tv = pd.read_csv(dataset_dir + "DrugSens_train_CDG.csv", index_col = 0, header = 0)
-        _drugsens_test = pd.read_csv(dataset_dir + "DrugSens_test_CDG.csv", index_col = 0, header = 0)
-    smiles_list, cl_list, drugsens = DrugsensTransform(pd.concat([_drugsens_tv, _drugsens_test], axis=0))
+    
+    _drugsens_tv = pd.read_csv(drugsens_dir + '/' + args['task'] + '/' + "DrugSens-Train.csv", index_col = 0, header = 0)
+    _drugsens_test = pd.read_csv(drugsens_dir + '/' + args['task'] + '/' + "DrugSens-Test.csv", index_col = 0, header = 0)
+    smiles_list, cl_list, drugsens = DrugSensTransform(pd.concat([_drugsens_tv, _drugsens_test], axis=0))
     drugsens_tv = drugsens.iloc[:len(_drugsens_tv)]
     drugsens_test = drugsens.iloc[len(_drugsens_tv):]
-    # print(drugsens_tv.shape)
 
     omics_dataset = OmicsDataset(cl_list, mut = Mut_df, expr = Expr_df, meth = Meth_df, cnv = CNV_df)
-    outtext_list = [use_mut, use_expr, use_meth, use_cnv]
+    outtext_list = [enable_mut, enable_expr, enable_meth, enable_cnv]
     
     assert len(drugsens_test) == len(_drugsens_test)
-    
-    # ------ Debug Mode ------
 
-    if args.debug:
+
+    if args['debug']:
         print('-- DEBUG MODE --')
         n_trials = 1
         max_tuning_epoch = 1
@@ -109,8 +103,8 @@ def main():
         batch_size = 256
     
     # ----- Setup ------
-    mainmetric, report_metrics, prediction_task = (BCE(),[BCE(),AUROC(),AUCPR()],'clas') if classify \
-                                             else (MSE(),[MSE(),RMSE(),PCC(),R2(),SRCC()],'regr')
+    mainmetric, report_metrics, prediction_task = (BCE(),[BCE(),AUROC(),AUCPR()],task) if task == 'clas' \
+                                             else (MSE(),[MSE(),RMSE(),PCC(),R2(),SRCC()],task)
     criterion = mainmetric # NOTE must alert (changed from nn.MSELoss to mainmetric)
     print('Loading dataset...')
 
@@ -122,9 +116,9 @@ def main():
     DatasetTest = DrugOmicsDataset(drugsens_test, omics_dataset, smiles_list, modelname, EVAL = True)
     testloader = get_dataloader(DatasetTest, modelname)
 
-    resultfolder = './results' if not args.debug else './test'
+    resultfolder = './results' if not args['debug'] else './test'
     hypertune_stop_flag = False
-    if args.hyperpath is None:
+    if args['hyperpath'] is None:
         hyperexpdir = f'{resultfolder}/{modelname}/hyperparameters/'
         os.makedirs(hyperexpdir,exist_ok=True)
         num_hyperrun = 1
@@ -151,7 +145,7 @@ def main():
 
     else: 
         hypertune_stop_flag = True
-        hyper_modelname,hyperexpname= args.hyperpath
+        hyper_modelname,hyperexpname= args['hyperpath']
         status = StatusReport(hyperexpname,hypertune_stop_flag)
         status.set_run_dir(RUN_DIR)
         hyper_jsondir = f'{resultfolder}/{hyper_modelname}/hyperparameters/{hyperexpname}.json'
@@ -199,11 +193,11 @@ def main():
                 omics_output_size=omics_output_size,
                 drop_rate=drop_rate,
                 input_size_list=omics_dataset.input_size,
-                args=args,
+                args = args,
             )
             
         if optimizer is None:
-            optimizer = optim.AdamW(model.parameters(),lr=lr, weight_decay=weight_decay)
+            optimizer = optim.Adam(model.parameters(),lr=lr, weight_decay=weight_decay)
 
         torch.cuda.empty_cache()
         validloss = []
@@ -235,7 +229,7 @@ def main():
                     break
 
                 [OmicsInput, DrugInput], Label = Data
-                DrugInput = mapDrugDEVICE(DrugInput, modelname, CUDA)
+                DrugInput = DrugInputToDevice(DrugInput, modelname, CUDA)
                 OmicsInput = [tensor.to(CUDA) for tensor in OmicsInput]
                 Label = Label.squeeze(-1).to(CUDA)    # [batch, task]
                 output = model([OmicsInput, DrugInput])    # [batch, output_size]
@@ -261,7 +255,6 @@ def main():
 
             time_end = datetime.now()
             duration_epoch = (time_end-time_start).total_seconds()
-            # scheduler.step()
             trainmeanloss = (cum_loss/len(trainloader)).item()
             print(f"Epoch duration = {duration_epoch} seconds")
             print(f"Train loss on Epoch {num_epoch} = {trainmeanloss}")

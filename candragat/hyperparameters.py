@@ -95,7 +95,7 @@ def candragat_tuning(trial:optuna.Trial, drugsens_df, omics_dataset, smiles_list
             for Data in trainloader:
 
                 [OmicsInput, DrugInput], Label = Data
-                DrugInput = mapDrugDEVICE(DrugInput, modelname, DEVICE)
+                DrugInput = DrugInputToDevice(DrugInput, modelname, DEVICE)
                 OmicsInput = [tensor.to(DEVICE) for tensor in OmicsInput]
                 Label = Label.squeeze(-1).to(DEVICE)    # [batch, task]
                 #Label = Label.t()            # [task, batch]

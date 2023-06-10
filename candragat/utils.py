@@ -228,7 +228,7 @@ class EarlyStopController(object):
     def BestModel(self):
         return self.MaxResult, self.MaxResultModelIdx
 
-def mapDrugDEVICE(DrugInput, modelname,DEVICE):
+def DrugInputToDevice(DrugInput, modelname,DEVICE):
     if modelname in ("AttentiveFP","FragAttentiveFP"):
         return [tensor.to(DEVICE) for tensor in DrugInput]
     elif modelname in ("GAT", "GCN"):
