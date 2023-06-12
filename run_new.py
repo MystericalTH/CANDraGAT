@@ -176,7 +176,7 @@ def main():
     
     drop_rate = pt_param['drop_rate']
     lr = pt_param['lr']
-    weight_decay = pt_param['WeightDecay']
+    weight_decay = pt_param['weight_decay']
     omics_output_size = pt_param['omics_output_size']
     drug_output_size = pt_param['drug_output_size']
     report_metrics_name = [metric.name for metric in report_metrics]

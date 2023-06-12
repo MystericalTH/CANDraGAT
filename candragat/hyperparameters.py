@@ -51,7 +51,7 @@ def get_trial_config(trial: optuna.Trial) -> Dict[str, Union[float, int]]:
         # 'batchsize': 2**(trial.suggest_int('batchsize', 2,5)),
         'drop_rate': trial.suggest_float('drop_rate',0.1,0.9,step=0.05),
         'lr': trial.suggest_categorical("lr", [1e-3, 5e-4, 1e-4, 5e-5, 1e-5]),
-        'WeightDecay': trial.suggest_float('weight_decay', 1e-7, 1e-5, log=True),
+        'weight_decay': trial.suggest_float('weight_decay', 1e-7, 1e-5, log=True),
         'omics_output_size': trial.suggest_int('omics_output_size',100,300,step=25),
         'drug_output_size': trial.suggest_int('drug_output_size',100,300,step=25)
     }
@@ -79,7 +79,7 @@ def candragat_tuning(trial:optuna.Trial, drugsens_df, omics_dataset, smiles_list
 
         model.train()
         model.zero_grad()
-        optimizer = optim.Adam(model.parameters(),lr=pt_param['lr'],weight_decay=pt_param['WeightDecay'])
+        optimizer = optim.Adam(model.parameters(),lr=pt_param['lr'],weight_decay=pt_param['weight_decay'])
         optimizer.zero_grad()
 
         DatasetTrain = DrugOmicsDataset(Trainset, omics_dataset, smiles_list, modelname, EVAL=False)
