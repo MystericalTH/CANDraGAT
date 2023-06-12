@@ -22,8 +22,8 @@ def parse_args():
                         action="store_false", help='enable gene mutation or not')
     parser.add_argument('--disable_expr', dest='enable_expr', default=True,
                         action="store_false", help='enable gene expression or not')
-    parser.add_argument('--disable_methy', dest='enable_meth', default=True,
-                        action="store_false", help='enable methylation or not')
+    # parser.add_argument('--disable_methy', dest='enable_meth', default=True,
+    #                     action="store_false", help='enable methylation or not')
     parser.add_argument('--disable_cnv', dest='enable_cnv', default=True,
                         action="store_false", help='enable copy number variation or not')
     parser.add_argument('--disable_drug', dest='enable_drug', default=True,
@@ -42,6 +42,7 @@ def parse_args():
 def main():
     
     args = parse_args()
+    args['enable_meth'] = False
 
     start_time = arrow.now()
     start_time_formatted = start_time.format('DD/MM/YYYY HH:mm:ss')
