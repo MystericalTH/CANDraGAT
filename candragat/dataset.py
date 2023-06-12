@@ -93,7 +93,7 @@ def get_dataloader(Dataset,modelname, batch_size = None):
     else: 
         assert batch_size is not None
         batch_size = batch_size
-        num_workers = 2
+        num_workers = 1
         drop_last = True
     if modelname in ("AttentiveFP","FragAttentiveFP"):
         return data.DataLoader(Dataset, batch_size=batch_size, num_workers=num_workers,

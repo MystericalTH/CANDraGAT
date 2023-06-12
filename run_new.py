@@ -60,9 +60,9 @@ def main():
 
     # ------ Loading Dataset  ------
 
-    enable_mut, enable_expr, enable_meth, enable_cnv = args['enable_mut'], args['enable_expr'], args['enable_meth'], args['enable_cnv']
-    features_dir = "./data/datasets/features"
-    drugsens_dir = "./data/datasets/sensitivity/stack"
+    enable_mut, enable_expr, enable_meth, enable_cnv, enable_drug = args['enable_mut'], args['enable_expr'], args['enable_meth'], args['enable_cnv'], args['enable_drug']
+    features_dir = "../data/datasets/features"
+    drugsens_dir = "../data/datasets/sensitivity/stack"
     Mut_df = pd.read_csv(features_dir + '/' + 'Mut.csv', index_col=0, header=0) 
     Expr_df = pd.read_csv(features_dir + '/' + 'GeneExp.csv', index_col=0, header=0) 
     Meth_df = pd.read_csv(features_dir + '/' + 'Meth.csv', index_col=0, header=0) 
@@ -76,8 +76,7 @@ def main():
     drugsens_test = drugsens.iloc[len(_drugsens_tv):]
 
     omics_dataset = OmicsDataset(cl_list, mut = Mut_df, expr = Expr_df, meth = Meth_df, cnv = CNV_df)
-    outtext_list = [enable_mut, enable_expr, enable_meth, enable_cnv]
-
+    outtext_list = [enable_mut, enable_expr, enable_meth, enable_cnv, enable_drug]
 
     if args['debug']:
         print('-- DEBUG MODE --')
@@ -93,8 +92,29 @@ def main():
         max_tuning_epoch = 3
         max_epoch = 30
         folds=5
-        batch_size = 64 
+        batch_size = 256
     
+    if enable_drug:
+        print('Use Drug')
+    else:
+        print('No Drug')
+    if enable_expr:
+        print('Use Gene Exp')
+    else:
+        print('No Gene Exp')
+    if enable_mut:
+        print('Use Gene Mut')
+    else:
+        print('No Gene Mut')
+    if enable_cnv:
+        print('Use CNV')
+    else:
+        print('No CNV')
+    if enable_meth:
+        print('Use DNA Methy')
+    else:
+        print('No DNA Methy')
+        
     # ----- Setup ------
     mainmetric, report_metrics, prediction_task = (BCE(),[BCE(),AUROC(),AUCPR()],task) if task == 'clas' \
                                              else (MSE(),[MSE(),RMSE(),PCC(),R2(),SRCC()],task)
@@ -109,7 +129,7 @@ def main():
     DatasetTest = DrugOmicsDataset(drugsens_test, omics_dataset, smiles_list, modelname, EVAL = True)
     testloader = get_dataloader(DatasetTest, modelname)
 
-    resultfolder = './results' if not args['debug'] else './test'
+    resultfolder = '../results' if not args['debug'] else '../test'
     hypertune_stop_flag = False
     if args['hyperpath'] is None:
         hyperexpdir = f'{resultfolder}/{modelname}/hyperparameters/'
@@ -129,7 +149,8 @@ def main():
         print('Start hyperparameters optimization')
         def candragat_tuning_simplified(trial):
             return candragat_tuning(trial, drugsens_tv, omics_dataset, smiles_list, modelname, status, batch_size, args, max_tuning_epoch)
-        run_hyper_study(study_func=candragat_tuning_simplified, n_trials=n_trials,hyperexpfilename=hyperexpdir+hyperexpname, study_name="candragat")
+        study_name=f'{modelname}-{task}'
+        run_hyper_study(study_func=candragat_tuning_simplified, n_trials=n_trials,hyperexpfilename=hyperexpdir+hyperexpname, study_name=study_name)
         pt_param = get_best_trial(hyperexpdir+hyperexpname)
         exp_name=f'{hyperexpname}_TestRun1'
         hypertune_stop_flag = True
