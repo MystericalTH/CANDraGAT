@@ -93,7 +93,7 @@ def main():
         max_tuning_epoch = 3
         max_epoch = 30
         folds=5
-        batch_size = 256
+        batch_size = 64 
     
     # ----- Setup ------
     mainmetric, report_metrics, prediction_task = (BCE(),[BCE(),AUROC(),AUCPR()],task) if task == 'clas' \
