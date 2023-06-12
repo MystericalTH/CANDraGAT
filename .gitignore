@@ -5,9 +5,12 @@ test/
 results/
 data/
 sbatch/
-
+log/
 slurm-*.out
 *.log
 
 # On MacBook
 env_setup.sh
+
+# On IST
+conda/
