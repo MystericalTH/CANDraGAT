@@ -2,8 +2,10 @@
 __pycache__/
 archive/
 test/
+results/
 data/
 sbatch/
+
 slurm-*.out
 *.log
 
