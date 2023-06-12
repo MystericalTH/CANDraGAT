@@ -8,6 +8,8 @@ sbatch/
 log/
 slurm-*.out
 *.log
+create_conda.sh
+Miniconda3-py37_4.9.2-Linux-x86_64.sh
 
 # On MacBook
 env_setup.sh
