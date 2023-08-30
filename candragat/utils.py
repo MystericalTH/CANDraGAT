@@ -11,6 +11,10 @@ import os
 import shutil
 import errno
 import re
+import logging
+import io
+import tqdm
+import time
 
 def set_base_seed(seed=None):        
     random.seed(seed)
@@ -233,3 +237,68 @@ def DrugInputToDevice(DrugInput, modelname,DEVICE):
         return [tensor.to(DEVICE) for tensor in DrugInput]
     elif modelname in ("GAT", "GCN"):
         return DrugInput.to(DEVICE)
+
+class MyLogging(object):
+    filename = 'output.log'
+    logger_names = []
+    logging_level = logging.INFO
+    group_id = ""
+    def __init__(self) -> None:
+        pass
+    @classmethod
+    def getLogger(cls, name, filename: str = None, logging_level: int = None):
+        if filename is None:
+            filename = cls.filename
+        if logging_level is None:
+            logging_level = cls.logging_level
+            
+        if name[:4] != MyLogging.group_id:
+            name = MyLogging.group_id + '.' + name
+        os.makedirs(os.path.dirname(filename), exist_ok=True)
+        logger = logging.getLogger(name)
+        if name not in cls.logger_names:
+            logger.setLevel(logging_level)
+
+            fhdlr = logging.FileHandler(filename)
+            formatter = logging.Formatter("%(asctime)-15s.%(msecs)03d %(name)-15s %(levelname)-8s %(message)s",
+                                        "%Y-%m-%d %H:%M:%S")
+            fhdlr.setFormatter(formatter)
+            logger.addHandler(fhdlr)
+            cls.logger_names.append(name)
+        return logger
+
+    @classmethod
+    def set_args(cls, args):
+        cls.filename = args['log']
+        cls.logging_level = args['logging_level']
+        
+    @staticmethod
+    def log_task(message, *out_args, **out_kwargs):
+        def inner(func):
+            def wrapper(*args, **kwargs):
+                logger = args[0].logger
+                logger.info(message)
+                output = func(*args, **kwargs)
+                logger.info(message + f" - DONE!")
+                return output
+            return wrapper
+        return inner
+
+    @classmethod
+    def setGroupID(cls, group_id):
+        cls.group_id = group_id
+        
+class TqdmToLogger(io.StringIO):
+    """
+        Output stream for TQDM which will output to logger module instead of
+        the StdOut.\n
+        From https://github.com/tqdm/tqdm/issues/313#issuecomment-267959111
+    """
+    def __init__(self,logger,level=None):
+        super(TqdmToLogger, self).__init__()
+        self.logger = logger
+        self.level = level or logging.INFO
+    def write(self,buf):
+        self.buf = buf.strip('\r\n\t ')
+    def flush(self):
+        self.logger.log(self.level, self.buf)
