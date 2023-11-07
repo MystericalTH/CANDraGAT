@@ -299,6 +299,6 @@ class TqdmToLogger(io.StringIO):
         self.logger = logger
         self.level = level or logging.INFO
     def write(self,buf):
-        self.buf = buf.strip('\r\n\t ')
+        self.buf = buf.strip()
     def flush(self):
         self.logger.log(self.level, self.buf)

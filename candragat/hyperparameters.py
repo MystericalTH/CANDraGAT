@@ -57,10 +57,10 @@ def get_trial_config(trial: optuna.Trial) -> Dict[str, Union[float, int]]:
     }
 
 def candragat_tuning(trial:optuna.Trial, drugsens_df, omics_dataset, smiles_list, modelname, status,
-        batch_size, args, max_tuning_epoch: int = 5, DEVICE = torch.device("cuda:0")):
+        batch_size, mainlogger, pbarlogger, args, max_tuning_epoch: int = 5, DEVICE = torch.device("cuda:0")):
     # global trial_id
     # trial_id += 1
-    print(f"Trial {trial.number}/{N_TRIALS}")
+    mainlogger.info(f"Trial {trial.number}/{N_TRIALS}")
     criterion = nn.MSELoss()
     pt_param = get_trial_config(trial)
     drug_model = get_drug_model(modelname,pt_param)
@@ -90,9 +90,8 @@ def candragat_tuning(trial:optuna.Trial, drugsens_df, omics_dataset, smiles_list
         for epoch in range(max_tuning_epoch):
 
             cum_loss = 0.0
-            printloss = 0.0
-
-            for Data in trainloader:
+            pbar = tqdm.tqdm(trainloader, total=len(trainloader), file=TqdmToLogger(pbarlogger), mininterval=10, desc='Hyperparameter Tuning - Training')
+            for Data in pbar:
 
                 [OmicsInput, DrugInput], Label = Data
                 DrugInput = DrugInputToDevice(DrugInput, modelname, DEVICE)
@@ -102,15 +101,15 @@ def candragat_tuning(trial:optuna.Trial, drugsens_df, omics_dataset, smiles_list
                 output = model([OmicsInput,DrugInput])   # [batch, output_size]
                 loss = criterion(output,Label).float()
                 cum_loss += loss.detach()
-                printloss += loss.detach()
-                
+                pbar.set_postfix({'loss': loss.item()}, refresh=False)
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
             
-            # trainmseloss = (cum_loss/len(trainloader)).item()
+            trainmseloss = (cum_loss/len(trainloader)).item()
+            mainlogger.info(f"Epoch {epoch+1}/{max_tuning_epoch} - Training MSE Loss: {trainmseloss}")
         metric = BCE() if args['task']=='clas' else MSE()
-        results = Validation(validloader, model, metric, modelname, CPU)[0]
+        results = Validation(validloader, model, metric, modelname, mainlogger, pbarlogger, CPU)[0]
         validmseloss.append(results[metric.name])
     
     status.update({'trial': status['trial'] + 1})
