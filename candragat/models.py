@@ -445,5 +445,30 @@ class MultiOmicsMolNet(nn.Module):
             prediction = torch.sigmoid(prediction)
 
         return prediction
+    
+    def forward_validation(self, Input):
+        [Mut, Expr, Meth, CNV], DrugTensor = Input
+        
+        if self.args['enable_mut']:
+            Mut_layer = self.mut_nn(Mut)
+            MultiOmics_layer.append(Mut_layer)
+        if self.args['enable_expr']:
+            Expr_layer = self.expr_nn(Expr)
+            MultiOmics_layer.append(Expr_layer)
+        if self.args['enable_meth']:
+            Meth_layer = self.meth_nn(Meth)
+            MultiOmics_layer.append(Meth_layer)
+        if self.args['enable_cnv']:
+            CNV_layer = self.cnv_nn(CNV)
+            MultiOmics_layer.append(CNV_layer)
+            
+        MultiOmics_layer = torch.cat(MultiOmics_layer, dim=1)
+        preout_layer = self.omics_fc(MultiOmics_layer)
+
+        if self.args['enable_drug']:
+            preout_layer = torch.cat([preout_layer,DrugTensor], dim=1)
+
+        prediction = self.out(preout_layer)
+        return prediction
 
 
