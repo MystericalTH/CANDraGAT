@@ -87,14 +87,14 @@ class DrugOmicsDataset(data.Dataset):
 
     def precalculate_drug_tensor(self, model: MultiOmicsMolNet):
         model.eval().cpu()
-        for drug_idx in range(self.drug_dataset):
+        for drug_idx in range(len(self.drug_dataset)):
             drug_data = self.drug_featurizer.featurize(self.drug_dataset, drug_idx)
-            drug_tensor = model.drug_nn(drug_data).mean(dim=0, keepdims=True)
+            drug_tensor = model.drug_nn(drug_data).mean(dim=0)
             self.drug_tensor_dict[drug_idx] = drug_tensor
     
 def get_dataloader(Dataset,modelname, batch_size = None):
     if Dataset.eval:
-        batch_size = 1
+        batch_size = batch_size
         num_workers = 0
         drop_last = False
     else: 
