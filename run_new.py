@@ -159,7 +159,7 @@ def main():
             
 
         DatasetTest = DrugOmicsDataset(drugsens_test, omics_dataset, smiles_list, modelname, EVAL = True)
-        testloader = get_dataloader(DatasetTest, modelname)
+        testloader = get_dataloader(DatasetTest, modelname, batch_size=batch_size)
         
         if args['hyperpath'] is None:
             mainlogger.info('Start hyperparameters optimization')
@@ -194,7 +194,7 @@ def main():
             DatasetTrain = DrugOmicsDataset(Trainset, omics_dataset, smiles_list, modelname, EVAL = False)
             DatasetValid = DrugOmicsDataset(Validset, omics_dataset, smiles_list, modelname, EVAL = True)
             trainloader = get_dataloader(DatasetTrain, modelname, batch_size=batch_size)
-            validloader = get_dataloader(DatasetValid, modelname)
+            validloader = get_dataloader(DatasetValid, modelname, batch_size=batch_size)
 
             ckpt_dir = os.path.join(RUN_DIR, f'fold_{fold}-seed_{seed}/')
             saver = Saver(ckpt_dir, max_epoch)

@@ -85,7 +85,7 @@ def candragat_tuning(trial:optuna.Trial, drugsens_df, omics_dataset, smiles_list
         DatasetTrain = DrugOmicsDataset(Trainset, omics_dataset, smiles_list, modelname, EVAL=False)
         DatasetValid = DrugOmicsDataset(Validset, omics_dataset, smiles_list, modelname, EVAL=True)
         trainloader = get_dataloader(DatasetTrain, modelname, batch_size=batch_size)
-        validloader = get_dataloader(DatasetValid, modelname)
+        validloader = get_dataloader(DatasetValid, modelname, batch_size=batch_size)
 
         for epoch in range(max_tuning_epoch):
 
