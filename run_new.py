@@ -20,14 +20,9 @@ def parse_args():
                         choices=model_names, help="AttentiveFP or GAT or GCN")
     parser.add_argument('--task', dest='task', default='regr',
                         action="store", help='classification or regression (default: \'regr\')', choices=['clas','regr'])
-    parser.add_argument('--disable_mut', dest='enable_mut', default=True,
-                        action="store_false", help='enable gene mutation or not')
-    parser.add_argument('--disable_expr', dest='enable_expr', default=True,
-                        action="store_false", help='enable gene expression or not')
-    parser.add_argument('--disable_methy', dest='enable_meth', default=True,
-                        action="store_false", help='enable methylation or not')
-    parser.add_argument('--disable_cnv', dest='enable_cnv', default=True,
-                        action="store_false", help='enable copy number variation or not')
+    parser.add_argument('--enable', dest='enable', default="mxdv", 
+                        help='feature(s) to enable; \nm = mutation, x = gene expression, d = DNA methylation, \n' + 
+                             'v = copy number variation')
     parser.add_argument('--disable_drug', dest='enable_drug', default=True,
                         action="store_false", help='enable drug feature or not')
     parser.add_argument('--note', dest='note', default='',
@@ -65,7 +60,6 @@ def main():
                                              else (MSE(),[MSE(),RMSE(),PCC(),R2(),SRCC()],task)
     criterion = mainmetric # NOTE must alert (changed from nn.MSELoss to mainmetric)
 
-    
     # ------- Storage Path -------
     today_date = date.today().strftime('%Y-%m-%d')
     if args['hyperpath'] is None:
@@ -90,12 +84,13 @@ def main():
             num_run+=1
         RUN_DIR = f'{resultfolder}/{modelname}/{prediction_task}/{hyperexpname}_TestRun{num_run}'
         exp_name=f'{hyperexpname}_TestRun{num_run}'
-       
+        
     mainlogger = MyLogging.getLogger("main", filename=f'{RUN_DIR}/main.log') 
     pbarlogger = MyLogging.getLogger('pbar', filename=f'{RUN_DIR}/pbar.log')
     
     mainlogger.info(f"SLURM ID: {args['job_id']}")
     mainlogger.info(f'Start time: {start_time_formatted}')
+
     try: 
         os.makedirs(RUN_DIR, exist_ok=True)
         status = StatusReport(hyperexpname,hypertune_stop_flag)
@@ -106,7 +101,8 @@ def main():
         mainlogger.info('Loading dataset...')
 
         mainlogger.info('-- TEST SET --')
-        enable_mut, enable_expr, enable_meth, enable_cnv, enable_drug = args['enable_mut'], args['enable_expr'], args['enable_meth'], args['enable_cnv'], args['enable_drug']
+        enable_mut, enable_expr, enable_meth, enable_cnv = args['enable_mut'], args['enable_expr'], args['enable_meth'], args['enable_cnv'] = [char in args['enable'] for char in 'mxdv']
+        enable_drug = args['enable_drug']
         features_dir = "./data/datasets/features"
         drugsens_dir = "./data/datasets/sensitivity/stack"
         Mut_df = pd.read_csv(features_dir + '/' + 'Mut.csv', index_col=0, header=0) 
