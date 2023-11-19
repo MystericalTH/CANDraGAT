@@ -8,22 +8,21 @@ from torch.utils.data import DataLoader
 def Validation(validloader: DataLoader, model: MultiOmicsMolNet, metrics, modelname, mainlogger, pbarlogger, DEVICE):
     model.eval().to(DEVICE)
     mainlogger.info("Validating..")
-    All_answer = torch.Tensor()
+    All_answer = []
     All_label = []
     validloader.dataset.precalculate_drug_tensor(model)
     for ii, Data in tqdm.tqdm(enumerate(validloader), total=len(validloader), file=TqdmToLogger(pbarlogger), mininterval=10, desc='Validation'):
 
         [ValidOmicsInput, ValidDrugInput], ValidLabel = Data
-        ValidDrugInput = DrugInputToDevice(ValidDrugInput, modelname, DEVICE)
+        ValidDrugInput = ValidDrugInput.to(DEVICE)
         ValidOmicsInput = [tensor.to(DEVICE) for tensor in ValidOmicsInput]
-
         ValidLabel = ValidLabel.squeeze(0).to(DEVICE)
 
         ValidOutput = model.forward_validation([ValidOmicsInput,ValidDrugInput])
         # ValidOutputMean = ValidOutput  # [1, output_size]
 
         All_answer.append(ValidOutput)
-        All_label.append(ValidLabel[0])
+        All_label.append(ValidLabel)
 
     scores = {}
     All_answer = torch.cat(All_answer, dim=0)
