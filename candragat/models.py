@@ -448,6 +448,7 @@ class MultiOmicsMolNet(nn.Module):
     
     def forward_validation(self, Input):
         [Mut, Expr, Meth, CNV], DrugTensor = Input
+        MultiOmics_layer = []
         
         if self.args['enable_mut']:
             Mut_layer = self.mut_nn(Mut)
