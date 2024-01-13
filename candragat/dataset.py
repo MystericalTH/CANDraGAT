@@ -4,6 +4,7 @@ from torch.utils import data
 from candragat.featurizer import *
 from torch_geometric.loader import DataLoader as PyGDataLoader
 from candragat.utils import graph_collate_fn
+from candragat.models import MultiOmicsMolNet
 import pandas as pd
 
 def DrugSensTransform(drugsens_df:pd.DataFrame):
@@ -54,20 +55,19 @@ class DrugOmicsDataset(data.Dataset):
         self.drug_featurizer = self.get_featurizer(drug_mode, EVAL)
         self.drug_dataset = self.drug_featurizer.prefeaturize(self.smiles_list)
         self.omics_dataset = omics_dataset
+        self.drug_tensor_dict = {}
 
     def __getitem__(self, index):
         cl_idx, drug_idx, _label = self.drugsens.iloc[index]
         label = torch.FloatTensor([_label])
         cl_idx = int(cl_idx)
         drug_idx = int(drug_idx)
-        # print("cl:",cl_idx, "- drug:",drug_idx)
         omics_data = self.omics_dataset[cl_idx]
-        drug_data = self.drug_featurizer.featurize(self.drug_dataset, drug_idx)
-        if self.eval and self.__drug_mode == 'FragAttentiveFP':
-            num_samples = drug_data[0].shape[0]
-            omics_data = [torch.stack([feature] * num_samples) for feature in omics_data]
-            # print('EVAL omics_data:', [x.shape for x in omics_data])
-            label = torch.stack([label] * num_samples)
+        
+        if self.eval:
+            drug_data = self.drug_tensor_dict[drug_idx]
+        else:
+            drug_data = self.drug_featurizer.featurize(self.drug_dataset, drug_idx)
         return [omics_data, drug_data], label
 
     def __len__(self):
@@ -85,9 +85,16 @@ class DrugOmicsDataset(data.Dataset):
         else:
             return MolFeaturizerList[drug_featurizer]
 
+    def precalculate_drug_tensor(self, model: MultiOmicsMolNet):
+        model.eval().cpu()
+        for drug_idx in self.drugsens['SMILES'].unique():
+            drug_data = self.drug_featurizer.featurize(self.drug_dataset, int(drug_idx))
+            drug_tensor = model.drug_nn(drug_data).mean(dim=0)
+            self.drug_tensor_dict[drug_idx] = drug_tensor
+    
 def get_dataloader(Dataset,modelname, batch_size = None):
     if Dataset.eval:
-        batch_size = 1
+        batch_size = batch_size
         num_workers = 0
         drop_last = False
     else: 

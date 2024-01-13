@@ -20,19 +20,14 @@ def parse_args():
                         choices=model_names, help="AttentiveFP or GAT or GCN")
     parser.add_argument('--task', dest='task', default='regr',
                         action="store", help='classification or regression (default: \'regr\')', choices=['clas','regr'])
-    parser.add_argument('--disable_mut', dest='enable_mut', default=True,
-                        action="store_false", help='enable gene mutation or not')
-    parser.add_argument('--disable_expr', dest='enable_expr', default=True,
-                        action="store_false", help='enable gene expression or not')
-    parser.add_argument('--disable_methy', dest='enable_meth', default=True,
-                        action="store_false", help='enable methylation or not')
-    parser.add_argument('--disable_cnv', dest='enable_cnv', default=True,
-                        action="store_false", help='enable copy number variation or not')
+    parser.add_argument('--enable', dest='enable', default="mxdv", 
+                        help='feature(s) to enable; \nm = mutation, x = gene expression, d = DNA methylation, \n' + 
+                             'v = copy number variation')
     parser.add_argument('--disable_drug', dest='enable_drug', default=True,
                         action="store_false", help='enable drug feature or not')
     parser.add_argument('--note', dest='note', default='',
                         action="store", help='a string of note to display in summary file')
-    parser.add_argument('-rs', '--resume', dest='hyperpath', help='load hyperparameter file, enter hyperparameter directory')
+    parser.add_argument('-rs', '--resume', dest='hyperpath', nargs=2 , help='load hyperparameter file, enter hyperparameter directory')
     parser.add_argument("--job-id", dest="job_id", type=int, help="job id")
     parser.add_argument('--debug', default=False, action="store_true", dest='debug', help='debug file/test run')
     parser.add_argument('-l', '--load_hyper', required=False,nargs=2, dest='hyperpath', help='load hyperparameter file, enter hyperparameter directory')
@@ -65,7 +60,6 @@ def main():
                                              else (MSE(),[MSE(),RMSE(),PCC(),R2(),SRCC()],task)
     criterion = mainmetric # NOTE must alert (changed from nn.MSELoss to mainmetric)
 
-    
     # ------- Storage Path -------
     today_date = date.today().strftime('%Y-%m-%d')
     if args['hyperpath'] is None:
@@ -77,7 +71,6 @@ def main():
         else:
             hyperexpname = f'{today_date}_HyperRun{num_hyperrun}' 
             json.dump({},open(hyperexpdir+hyperexpname+'.json','w')) # placeholder file
-        RUN_DIR = f'{resultfolder}/{modelname}/{prediction_task}/{hyperexpname}_TestRun1'
         exp_name=f'{hyperexpname}_TestRun1'
         
     else: 
@@ -88,25 +81,28 @@ def main():
         num_run = 1
         while os.path.exists(f'{resultfolder}/{modelname}/{prediction_task}/{hyperexpname}_TestRun{num_run}'):
             num_run+=1
-        RUN_DIR = f'{resultfolder}/{modelname}/{prediction_task}/{hyperexpname}_TestRun{num_run}'
         exp_name=f'{hyperexpname}_TestRun{num_run}'
-       
+        
+    status = StatusReport(hyperexpname,hypertune_stop_flag)
+    RUN_DIR = f'{resultfolder}/{modelname}/{prediction_task}/{exp_name}'
     mainlogger = MyLogging.getLogger("main", filename=f'{RUN_DIR}/main.log') 
     pbarlogger = MyLogging.getLogger('pbar', filename=f'{RUN_DIR}/pbar.log')
+        
+    os.makedirs(RUN_DIR, exist_ok=True)
+    status.set_run_dir(RUN_DIR)
+    mainlogger.info(f'Your run directory is "{RUN_DIR}"')
     
     mainlogger.info(f"SLURM ID: {args['job_id']}")
     mainlogger.info(f'Start time: {start_time_formatted}')
+
     try: 
-        os.makedirs(RUN_DIR, exist_ok=True)
-        status = StatusReport(hyperexpname,hypertune_stop_flag)
-        status.set_run_dir(RUN_DIR)
-        mainlogger.info(f'Your run directory is "{RUN_DIR}"')
         
         # ------ Loading Dataset  ------
         mainlogger.info('Loading dataset...')
 
         mainlogger.info('-- TEST SET --')
-        enable_mut, enable_expr, enable_meth, enable_cnv, enable_drug = args['enable_mut'], args['enable_expr'], args['enable_meth'], args['enable_cnv'], args['enable_drug']
+        enable_mut, enable_expr, enable_meth, enable_cnv = args['enable_mut'], args['enable_expr'], args['enable_meth'], args['enable_cnv'] = [char in args['enable'] for char in 'mxdv']
+        enable_drug = args['enable_drug']
         features_dir = "./data/datasets/features"
         drugsens_dir = "./data/datasets/sensitivity/stack"
         Mut_df = pd.read_csv(features_dir + '/' + 'Mut.csv', index_col=0, header=0) 
@@ -130,9 +126,10 @@ def main():
             max_tuning_epoch = 1
             max_epoch = 3
             folds=2
-            drugsens_tv = drugsens_tv.iloc[:1000]
-            drugsens_test = drugsens_test.iloc[:100]
-            batch_size = 16
+            drugsens_tv = drugsens_tv.iloc[:5000]
+            drugsens_test = drugsens_test.iloc[:1000]
+            batch_size = 32
+            os.makedirs(f'{RUN_DIR}/fold_{fold}-seed_{seed}/.debug/', exist_ok=True)
         else:
             n_trials = 30
             max_tuning_epoch = 3
@@ -163,7 +160,7 @@ def main():
             
 
         DatasetTest = DrugOmicsDataset(drugsens_test, omics_dataset, smiles_list, modelname, EVAL = True)
-        testloader = get_dataloader(DatasetTest, modelname)
+        testloader = get_dataloader(DatasetTest, modelname, batch_size=batch_size)
         
         if args['hyperpath'] is None:
             mainlogger.info('Start hyperparameters optimization')
@@ -198,7 +195,7 @@ def main():
             DatasetTrain = DrugOmicsDataset(Trainset, omics_dataset, smiles_list, modelname, EVAL = False)
             DatasetValid = DrugOmicsDataset(Validset, omics_dataset, smiles_list, modelname, EVAL = True)
             trainloader = get_dataloader(DatasetTrain, modelname, batch_size=batch_size)
-            validloader = get_dataloader(DatasetValid, modelname)
+            validloader = get_dataloader(DatasetValid, modelname, batch_size=batch_size)
 
             ckpt_dir = os.path.join(RUN_DIR, f'fold_{fold}-seed_{seed}/')
             saver = Saver(ckpt_dir, max_epoch)
@@ -245,19 +242,12 @@ def main():
                         if stop_flag:
                             break
                         
-                        with torch.profiler.profile(
-                                activities=[
-                                    torch.profiler.ProfilerActivity.CPU,
-                                    torch.profiler.ProfilerActivity.CUDA,
-                                ],
-                                with_stack=True
-                            ) as p:
-                            [OmicsInput, DrugInput], Label = Data
-                            DrugInput = DrugInputToDevice(DrugInput, modelname, CUDA)
-                            OmicsInput = [tensor.to(CUDA) for tensor in OmicsInput]
+
+                        [OmicsInput, DrugInput], Label = Data
+                        DrugInput = DrugInputToDevice(DrugInput, modelname, CUDA)
+                        OmicsInput = [tensor.to(CUDA) for tensor in OmicsInput]
                             # Label = Label.squeeze(-1).to(CUDA)    # [batch, task]
                             
-                        print(p.key_averages().table(sort_by="self_cuda_time_total", row_limit=-1))
                         output = model([OmicsInput, DrugInput])    # [batch, output_size]
 
                         loss = criterion(output.to(CPU), Label.to(CPU), requires_backward = True)
@@ -277,7 +267,9 @@ def main():
                 mainlogger.info(f"Epoch duration = {duration_epoch} seconds")
                 mainlogger.info(f"Train loss on Epoch {num_epoch} = {trainmeanloss}")
 
-                validresult = Validation(validloader, model, report_metrics, modelname, mainlogger, pbarlogger, CPU)[0]
+                validresult, predIC50, labeledIC50 = Validation(validloader, model, report_metrics, modelname, mainlogger, pbarlogger, CPU)
+                if args['debug']:
+                    np.savez(f'{RUN_DIR}/fold_{fold}-seed_{seed}/.debug/valid-epoch{num_epoch}-IC50.npz', predIC50=predIC50, labeledIC50=labeledIC50)
                 validmeanloss = validresult[mainmetric.name]
 
                 mainlogger.info('===========================================================')
@@ -289,7 +281,9 @@ def main():
 
             bestmodel = saver.LoadModel()
             score, predIC50, labeledIC50 = Validation(testloader, bestmodel, report_metrics, modelname, mainlogger, pbarlogger, CPU)
-
+            if args['debug']:
+                np.savez(f'{RUN_DIR}/fold_{fold}-seed_{seed}/.debug/test-IC50.npz', predIC50=predIC50, labeledIC50=labeledIC50)
+                
             for metric in score:
                 resultsdf.loc[fold,metric] = score[metric]
 

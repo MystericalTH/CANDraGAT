@@ -19,7 +19,9 @@ CPU = torch.device('cpu')
 
 
 def get_best_trial(hyper_dir):
-    with open(f'{hyper_dir}.json','r') as jsonfile:
+    if hyper_dir[-5:] != ".json":
+        hyper_dir += '.json'
+    with open(hyper_dir,'r') as jsonfile:
         best_trial_param = json.load(jsonfile)
     return best_trial_param
 
@@ -29,7 +31,7 @@ def run_hyper_study(study_func, n_trials, hyperexpfilename, study_name):
     storage = optuna.storages.RDBStorage(
         f"sqlite:///{hyperexpfilename}.db",
         heartbeat_interval=1,
-        failed_trial_callback=RetryFailedTrialCallback(),
+        # failed_trial_callback=RetryFailedTrialCallback(),
         engine_kwargs={"connect_args": {"timeout": 10}}
     )
     study = optuna.create_study(storage=storage, direction="minimize", study_name=study_name, load_if_exists=True)
@@ -85,7 +87,7 @@ def candragat_tuning(trial:optuna.Trial, drugsens_df, omics_dataset, smiles_list
         DatasetTrain = DrugOmicsDataset(Trainset, omics_dataset, smiles_list, modelname, EVAL=False)
         DatasetValid = DrugOmicsDataset(Validset, omics_dataset, smiles_list, modelname, EVAL=True)
         trainloader = get_dataloader(DatasetTrain, modelname, batch_size=batch_size)
-        validloader = get_dataloader(DatasetValid, modelname)
+        validloader = get_dataloader(DatasetValid, modelname, batch_size=batch_size)
 
         for epoch in range(max_tuning_epoch):
 
