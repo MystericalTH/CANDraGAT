@@ -27,7 +27,7 @@ def parse_args():
                         action="store_false", help='enable drug feature or not')
     parser.add_argument('--note', dest='note', default='',
                         action="store", help='a string of note to display in summary file')
-    parser.add_argument('-rs', '--resume', dest='hyperpath', help='load hyperparameter file, enter hyperparameter directory')
+    parser.add_argument('-rs', '--resume', dest='hyperpath', nargs=2 , help='load hyperparameter file, enter hyperparameter directory')
     parser.add_argument("--job-id", dest="job_id", type=int, help="job id")
     parser.add_argument('--debug', default=False, action="store_true", dest='debug', help='debug file/test run')
     parser.add_argument('-l', '--load_hyper', required=False,nargs=2, dest='hyperpath', help='load hyperparameter file, enter hyperparameter directory')
@@ -71,7 +71,6 @@ def main():
         else:
             hyperexpname = f'{today_date}_HyperRun{num_hyperrun}' 
             json.dump({},open(hyperexpdir+hyperexpname+'.json','w')) # placeholder file
-        RUN_DIR = f'{resultfolder}/{modelname}/{prediction_task}/{hyperexpname}_TestRun1'
         exp_name=f'{hyperexpname}_TestRun1'
         
     else: 
@@ -82,20 +81,21 @@ def main():
         num_run = 1
         while os.path.exists(f'{resultfolder}/{modelname}/{prediction_task}/{hyperexpname}_TestRun{num_run}'):
             num_run+=1
-        RUN_DIR = f'{resultfolder}/{modelname}/{prediction_task}/{hyperexpname}_TestRun{num_run}'
         exp_name=f'{hyperexpname}_TestRun{num_run}'
         
+    status = StatusReport(hyperexpname,hypertune_stop_flag)
+    RUN_DIR = f'{resultfolder}/{modelname}/{prediction_task}/{exp_name}'
     mainlogger = MyLogging.getLogger("main", filename=f'{RUN_DIR}/main.log') 
     pbarlogger = MyLogging.getLogger('pbar', filename=f'{RUN_DIR}/pbar.log')
+        
+    os.makedirs(RUN_DIR, exist_ok=True)
+    status.set_run_dir(RUN_DIR)
+    mainlogger.info(f'Your run directory is "{RUN_DIR}"')
     
     mainlogger.info(f"SLURM ID: {args['job_id']}")
     mainlogger.info(f'Start time: {start_time_formatted}')
 
     try: 
-        os.makedirs(RUN_DIR, exist_ok=True)
-        status = StatusReport(hyperexpname,hypertune_stop_flag)
-        status.set_run_dir(RUN_DIR)
-        mainlogger.info(f'Your run directory is "{RUN_DIR}"')
         
         # ------ Loading Dataset  ------
         mainlogger.info('Loading dataset...')
@@ -126,9 +126,10 @@ def main():
             max_tuning_epoch = 1
             max_epoch = 3
             folds=2
-            drugsens_tv = drugsens_tv.iloc[:1000]
-            drugsens_test = drugsens_test.iloc[:100]
-            batch_size = 16
+            drugsens_tv = drugsens_tv.iloc[:5000]
+            drugsens_test = drugsens_test.iloc[:1000]
+            batch_size = 32
+            os.makedirs(f'{RUN_DIR}/fold_{fold}-seed_{seed}/.debug/', exist_ok=True)
         else:
             n_trials = 30
             max_tuning_epoch = 3
@@ -241,19 +242,12 @@ def main():
                         if stop_flag:
                             break
                         
-                        with torch.profiler.profile(
-                                activities=[
-                                    torch.profiler.ProfilerActivity.CPU,
-                                    torch.profiler.ProfilerActivity.CUDA,
-                                ],
-                                with_stack=True
-                            ) as p:
-                            [OmicsInput, DrugInput], Label = Data
-                            DrugInput = DrugInputToDevice(DrugInput, modelname, CUDA)
-                            OmicsInput = [tensor.to(CUDA) for tensor in OmicsInput]
+
+                        [OmicsInput, DrugInput], Label = Data
+                        DrugInput = DrugInputToDevice(DrugInput, modelname, CUDA)
+                        OmicsInput = [tensor.to(CUDA) for tensor in OmicsInput]
                             # Label = Label.squeeze(-1).to(CUDA)    # [batch, task]
                             
-                        print(p.key_averages().table(sort_by="self_cuda_time_total", row_limit=-1))
                         output = model([OmicsInput, DrugInput])    # [batch, output_size]
 
                         loss = criterion(output.to(CPU), Label.to(CPU), requires_backward = True)
@@ -273,7 +267,9 @@ def main():
                 mainlogger.info(f"Epoch duration = {duration_epoch} seconds")
                 mainlogger.info(f"Train loss on Epoch {num_epoch} = {trainmeanloss}")
 
-                validresult = Validation(validloader, model, report_metrics, modelname, mainlogger, pbarlogger, CPU)[0]
+                validresult, predIC50, labeledIC50 = Validation(validloader, model, report_metrics, modelname, mainlogger, pbarlogger, CPU)
+                if args['debug']:
+                    np.savez(f'{RUN_DIR}/fold_{fold}-seed_{seed}/.debug/valid-epoch{num_epoch}-IC50.npz', predIC50=predIC50, labeledIC50=labeledIC50)
                 validmeanloss = validresult[mainmetric.name]
 
                 mainlogger.info('===========================================================')
@@ -285,7 +281,9 @@ def main():
 
             bestmodel = saver.LoadModel()
             score, predIC50, labeledIC50 = Validation(testloader, bestmodel, report_metrics, modelname, mainlogger, pbarlogger, CPU)
-
+            if args['debug']:
+                np.savez(f'{RUN_DIR}/fold_{fold}-seed_{seed}/.debug/test-IC50.npz', predIC50=predIC50, labeledIC50=labeledIC50)
+                
             for metric in score:
                 resultsdf.loc[fold,metric] = score[metric]
 

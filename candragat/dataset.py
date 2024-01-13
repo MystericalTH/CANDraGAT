@@ -87,8 +87,8 @@ class DrugOmicsDataset(data.Dataset):
 
     def precalculate_drug_tensor(self, model: MultiOmicsMolNet):
         model.eval().cpu()
-        for drug_idx in range(len(self.drug_dataset)):
-            drug_data = self.drug_featurizer.featurize(self.drug_dataset, drug_idx)
+        for drug_idx in self.drugsens['SMILES'].unique():
+            drug_data = self.drug_featurizer.featurize(self.drug_dataset, int(drug_idx))
             drug_tensor = model.drug_nn(drug_data).mean(dim=0)
             self.drug_tensor_dict[drug_idx] = drug_tensor
     

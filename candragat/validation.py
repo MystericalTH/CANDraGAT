@@ -4,6 +4,7 @@ import tqdm
 from candragat.utils import TqdmToLogger
 from candragat.models import MultiOmicsMolNet
 from torch.utils.data import DataLoader
+import numpy as np
 
 def Validation(validloader: DataLoader, model: MultiOmicsMolNet, metrics, modelname, mainlogger, pbarlogger, DEVICE):
     model.eval().to(DEVICE)
@@ -19,18 +20,18 @@ def Validation(validloader: DataLoader, model: MultiOmicsMolNet, metrics, modeln
         ValidLabel = ValidLabel.squeeze(0).to(DEVICE)
 
         ValidOutput = model.forward_validation([ValidOmicsInput,ValidDrugInput])
-        # ValidOutputMean = ValidOutput  # [1, output_size]
-
+        
         All_answer.append(ValidOutput)
         All_label.append(ValidLabel)
 
     scores = {}
-    All_answer = torch.cat(All_answer, dim=0)
-    All_label = torch.cat(All_label, dim=0)
+    All_answer = torch.cat(All_answer, dim=0).squeeze()
+    All_label = torch.cat(All_label, dim=0).squeeze()
     All_answer = All_answer.tolist()
     All_label = All_label.tolist()
 
     assert len(All_label) == len(All_answer)
+
     if len(metrics) != 1:
         for metric in metrics:
             result = metric(All_answer, All_label)
