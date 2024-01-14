@@ -342,7 +342,7 @@ class R2(BasicCriterion):
 class SRCC(BasicCriterion):
     def __init__(self):
         super(SRCC, self).__init__()
-        self.name = 'Spearman Rank Cor. Coef.'
+        self.name = 'SpearmanRankCorrCoef'
 
     def compute(self, answer, label):
         assert len(answer) == len(label)
