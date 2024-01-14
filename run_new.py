@@ -16,6 +16,7 @@ MyLogging.setGroupID('candragat')
 def parse_args():
     model_names = ["AttentiveFP", "GAT", "GCN","FragAttentiveFP"]
     parser = ArgumentParser(description='ablation_analysis')
+    parser.add_argument('configs', help="JSON configs file under comfigs/ folder")
     parser.add_argument('--modelname', dest='modelname', action='store', default = "FragAttentiveFP",
                         choices=model_names, help="AttentiveFP or GAT or GCN")
     parser.add_argument('--task', dest='task', default='regr',
@@ -39,7 +40,7 @@ def parse_args():
 
 def main():
     args = parse_args()
-    
+    configs = json.load(open(os.path.join("configs", args['configs']),'r'))
 
     start_time = arrow.now()
     start_time_formatted = start_time.format('DD/MM/YYYY HH:mm:ss')
@@ -55,7 +56,7 @@ def main():
     resultfolder = './results' if not args['debug'] else './test'
     hypertune_stop_flag = False
     
-    # ----- Setup ------
+    # ---------- Setup ----------
     mainmetric, report_metrics, prediction_task = (BCE(),[BCE(),AUROC(),AUCPR()],task) if task == 'clas' \
                                              else (MSE(),[MSE(),RMSE(),PCC(),R2(),SRCC()],task)
     criterion = mainmetric # NOTE must alert (changed from nn.MSELoss to mainmetric)
@@ -121,22 +122,16 @@ def main():
         outtext_list = [enable_mut, enable_expr, enable_meth, enable_cnv, enable_drug]
 
         study_attrs = {}
+        n_trials = configs['n_trials']
+        max_tuning_epoch = configs['max_tuning_epoch']
+        max_epoch = configs['max_epoch']
+        folds = configs['folds']
+        batch_size = configs['batch_size']
         
-        if args['debug']:
+        if configs['dataset_debug']:
             mainlogger.info('-- DEBUG MODE --')
-            n_trials = 1
-            max_tuning_epoch = 1
-            max_epoch = 3
-            folds=2
-            drugsens_tv = drugsens_tv.iloc[:5000]
-            drugsens_test = drugsens_test.iloc[:1000]
-            batch_size = 32
-        else:
-            n_trials = 30
-            max_tuning_epoch = 3
-            max_epoch = 30
-            folds=5
-            batch_size = 64
+            drugsens_tv = drugsens_tv.iloc[:configs['drugsens_tv_num_items']]
+            drugsens_test = drugsens_test.iloc[:configs['drugsens_test_num_items']]
         
         if enable_drug:
             mainlogger.info('Use Drug')
