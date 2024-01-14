@@ -1,0 +1,10 @@
+{
+    "n_trials": 1,
+    "max_tuning_epoch": 1,
+    "max_epoch": 3,
+    "folds": 2,
+    "batch_size": 32,
+    "drugsens_tv_num_items": 5000,
+    "drugsens_test_num_items": 1000,
+    "dataset_debug": true
+}
