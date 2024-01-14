@@ -298,7 +298,7 @@ def main():
 
         for col in resultsdf.columns:
             mean, interval = compute_confidence_interval(resultsdf[col])
-            outtext_list.extend((mean,interval))
+            outtext_list.extend((round(mean, 4), round(interval, 4)))
 
         end_time = arrow.now()
         end_time_formatted = end_time.format('DD/MM/YYYY HH:mm:ss')
