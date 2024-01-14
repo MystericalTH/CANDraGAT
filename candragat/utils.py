@@ -23,12 +23,13 @@ def set_seed(seed=None):
     if seed is None:
         seed = random.randrange(1000)
     torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
     np.random.seed(seed)
     return seed
 
 def df_kfold_split(df, n_splits=5, seed: int = None) -> Generator[pd.DataFrame, pd.DataFrame, None]:
     assert type(df) == pd.DataFrame
-    kfold = KFold(n_splits=n_splits,random_state=seed)
+    kfold = KFold(n_splits=n_splits, shuffle=True, random_state=seed)
     list_idx = list(range(len(df)))
     for i, (train_idx, test_idx) in enumerate(kfold.split(list_idx)):
         df_train = df.iloc[train_idx]

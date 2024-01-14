@@ -41,11 +41,12 @@ def parse_args():
 def main():
     args = parse_args()
     configs = json.load(open(os.path.join("configs", args['configs']),'r'))
-
     start_time = arrow.now()
     start_time_formatted = start_time.format('DD/MM/YYYY HH:mm:ss')
 
     set_base_seed(42)
+    torch.backends.cudnn.deterministic = True
+    
     task = args['task']
     modelname = args['modelname']
     note = args['note']
@@ -185,7 +186,7 @@ def main():
         #############################
         
         
-        for fold, (Trainset, Validset) in enumerate(df_kfold_split(drugsens_tv, n_splits=folds),start=0): 
+        for fold, (Trainset, Validset) in enumerate(df_kfold_split(drugsens_tv, n_splits=folds, seed=42),start=0): 
             mainlogger.info(f'=============== Fold {fold+1}/{folds} ===============')
 
             seed = set_seed(100)
