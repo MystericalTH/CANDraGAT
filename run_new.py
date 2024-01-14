@@ -120,6 +120,8 @@ def main():
         omics_dataset = OmicsDataset(cl_list, mut = Mut_df, expr = Expr_df, meth = Meth_df, cnv = CNV_df)
         outtext_list = [enable_mut, enable_expr, enable_meth, enable_cnv, enable_drug]
 
+        study_attrs = {}
+        
         if args['debug']:
             mainlogger.info('-- DEBUG MODE --')
             n_trials = 1
@@ -129,7 +131,6 @@ def main():
             drugsens_tv = drugsens_tv.iloc[:5000]
             drugsens_test = drugsens_test.iloc[:1000]
             batch_size = 32
-            os.makedirs(f'{RUN_DIR}/fold_{fold}-seed_{seed}/.debug/', exist_ok=True)
         else:
             n_trials = 30
             max_tuning_epoch = 3
@@ -157,21 +158,24 @@ def main():
             mainlogger.info('Use DNA Methy')
         else:
             mainlogger.info('No DNA Methy')
-            
+        feat_prefix = ''.join([char for char, enable in zip('mxdvD', [enable_mut, enable_expr, enable_meth, enable_cnv, enable_drug]) if enable])
+        study_name=f'{modelname}:{task}:{feat_prefix}'
 
         DatasetTest = DrugOmicsDataset(drugsens_test, omics_dataset, smiles_list, modelname, EVAL = True)
         testloader = get_dataloader(DatasetTest, modelname, batch_size=batch_size)
         
-        if args['hyperpath'] is None:
-            mainlogger.info('Start hyperparameters optimization')
-            def candragat_tuning_simplified(trial):
-                return candragat_tuning(trial, drugsens_tv, omics_dataset, smiles_list, modelname, status, batch_size, mainlogger, pbarlogger, args, max_tuning_epoch)
-            study_name=f'{modelname}-{task}'
-            run_hyper_study(study_func=candragat_tuning_simplified, n_trials=n_trials,hyperexpfilename=hyperexpdir+hyperexpname, study_name=study_name)
-            pt_param = get_best_trial(hyperexpdir+hyperexpname)
-            hypertune_stop_flag = True
-            status.update({'hypertune_stop_flag':True})
-            mainlogger.info('Hyperparameters optimization done')
+        mainlogger.info('Hyperparameters optimization')
+        study_attrs['model'] = modelname
+        study_attrs['task'] = dict(zip(['clas','regr'], ['classification', 'regression']))[prediction_task]
+        for key, feature in zip(['mutation', 'gene expression', 'DNA methylation', 'copy number variation', 'drug'], 
+                                ['mut','expr','meth','cnv','drug']):
+            study_attrs[key] = args['enable_'+feature]
+        def candragat_tuning_simplified(trial):
+            return candragat_tuning(trial, drugsens_tv, omics_dataset, smiles_list, modelname, status, batch_size, mainlogger, pbarlogger, args, max_tuning_epoch)
+        run_hyper_study(study_func=candragat_tuning_simplified, N_TRIALS=n_trials,hyperexpfilename=hyperexpdir+hyperexpname, study_name=study_name, study_attrs=study_attrs,result_folder=resultfolder)
+        pt_param = get_best_trial(study_name, result_folder=resultfolder)
+        hypertune_stop_flag = True
+        status.update({'hypertune_stop_flag':True})
 
         outtext_list.insert(0,exp_name)
         
@@ -197,8 +201,10 @@ def main():
             trainloader = get_dataloader(DatasetTrain, modelname, batch_size=batch_size)
             validloader = get_dataloader(DatasetValid, modelname, batch_size=batch_size)
 
-            ckpt_dir = os.path.join(RUN_DIR, f'fold_{fold}-seed_{seed}/')
-            saver = Saver(ckpt_dir, max_epoch)
+            fold_dir = os.path.join(RUN_DIR, f'fold_{fold}-seed_{seed}')
+            if args['debug']:
+                os.makedirs(f'{fold_dir}/.debug/', exist_ok=True)
+            saver = Saver(fold_dir, max_epoch)
             model, optimizer = saver.LoadModel(load_all=True)
 
             if model is None:
@@ -269,7 +275,7 @@ def main():
 
                 validresult, predIC50, labeledIC50 = Validation(validloader, model, report_metrics, modelname, mainlogger, pbarlogger, CPU)
                 if args['debug']:
-                    np.savez(f'{RUN_DIR}/fold_{fold}-seed_{seed}/.debug/valid-epoch{num_epoch}-IC50.npz', predIC50=predIC50, labeledIC50=labeledIC50)
+                    np.savez(f'{fold_dir}/.debug/valid-epoch{num_epoch}-IC50.npz', predIC50=predIC50, labeledIC50=labeledIC50)
                 validmeanloss = validresult[mainmetric.name]
 
                 mainlogger.info('===========================================================')
@@ -280,20 +286,19 @@ def main():
             torch.cuda.empty_cache()
 
             bestmodel = saver.LoadModel()
+            mainlogger.info('TEST SET')
             score, predIC50, labeledIC50 = Validation(testloader, bestmodel, report_metrics, modelname, mainlogger, pbarlogger, CPU)
-            if args['debug']:
-                np.savez(f'{RUN_DIR}/fold_{fold}-seed_{seed}/.debug/test-IC50.npz', predIC50=predIC50, labeledIC50=labeledIC50)
                 
             for metric in score:
                 resultsdf.loc[fold,metric] = score[metric]
 
-            modelpath3 = f'{RUN_DIR}/fold_{fold}-seed_{seed}/'
             traintestloss = np.array([trainloss, validloss])
-            np.savetxt(modelpath3+'traintestloss.csv', traintestloss, delimiter=',', fmt='%.5f')
+            np.savetxt(fold_dir+'/traintestloss.csv', traintestloss, delimiter=',', fmt='%.5f')
 
             # create text file for test
             testpredlabel = np.array([predIC50, labeledIC50]).T
-            np.savetxt(modelpath3+'testpred_label.csv', testpredlabel, delimiter=',', fmt='%.5f')
+            np.savetxt(f'{fold_dir}/testIC50.csv', testpredlabel, delimiter=',', fmt='%.5f')
+            np.savez(f'{fold_dir}/testIC50.npz', predIC50=predIC50, labeledIC50=labeledIC50)
 
         for col in resultsdf.columns:
             mean, interval = compute_confidence_interval(resultsdf[col])

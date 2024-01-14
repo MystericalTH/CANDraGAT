@@ -18,31 +18,39 @@ CPU = torch.device('cpu')
 # trial_id = 0
 
 
-def get_best_trial(hyper_dir):
-    if hyper_dir[-5:] != ".json":
-        hyper_dir += '.json'
-    with open(hyper_dir,'r') as jsonfile:
-        best_trial_param = json.load(jsonfile)
+def get_best_trial(study_name, result_folder: str = "results"):
+    db_path = f"sqlite:///{result_folder}/hyperparameter-tuning.db"
+    storage = optuna.storages.RDBStorage(
+        db_path,
+        heartbeat_interval=1,
+        # failed_trial_callback=RetryFailedTrialCallback(),
+        engine_kwargs={"connect_args": {"timeout": 10}}
+    )
+    study = optuna.load_study(storage=storage, study_name=study_name)
+    best_trial_param = {k:v for k, v in study.best_trial.params.items()}
     return best_trial_param
 
-def run_hyper_study(study_func, n_trials, hyperexpfilename, study_name):
-    global N_TRIALS
-    N_TRIALS = n_trials
+def run_hyper_study(study_func, N_TRIALS, hyperexpfilename, study_name, study_attrs, result_folder: str = "results"):
+    global GLOBAL_N_TRIALS
+    GLOBAL_N_TRIALS = N_TRIALS
+    db_path = f"sqlite:///{result_folder}/hyperparameter-tuning.db"
     storage = optuna.storages.RDBStorage(
-        f"sqlite:///{hyperexpfilename}.db",
+        db_path,
         heartbeat_interval=1,
         # failed_trial_callback=RetryFailedTrialCallback(),
         engine_kwargs={"connect_args": {"timeout": 10}}
     )
     study = optuna.create_study(storage=storage, direction="minimize", study_name=study_name, load_if_exists=True)
-    print(study_name + " is running. Trials saved to " + f"sqlite:///{hyperexpfilename}.db")
+    print(study_name + " is running. Trials saved to " + db_path)
+    for k, v in study_attrs.items():
+        study.set_user_attr(k, v)
+    n_trials = max(0, N_TRIALS-len(study.trials))
+    
     study.optimize(study_func, n_trials=n_trials, gc_after_trial=True)
     trial = study.best_trial
-    best_trial_param = dict()
-    for key, value in trial.params.items():
-        best_trial_param[key]=value
+    best_trial_param = {k:v for k, v in trial.params.items()}
     with open(f'{hyperexpfilename}.json','w') as jsonfile:
-        json.dump(best_trial_param,jsonfile,indent=4)
+        json.dump(best_trial_param, jsonfile, indent=4)
     return study
 
 def get_trial_config(trial: optuna.Trial) -> Dict[str, Union[float, int]]:
@@ -62,7 +70,7 @@ def candragat_tuning(trial:optuna.Trial, drugsens_df, omics_dataset, smiles_list
         batch_size, mainlogger, pbarlogger, args, max_tuning_epoch: int = 5, DEVICE = torch.device("cuda:0")):
     # global trial_id
     # trial_id += 1
-    mainlogger.info(f"Trial {trial.number}/{N_TRIALS}")
+    mainlogger.info(f"=============== Trial {trial.number+1}/{GLOBAL_N_TRIALS} ===============")
     criterion = nn.MSELoss()
     pt_param = get_trial_config(trial)
     drug_model = get_drug_model(modelname,pt_param)
