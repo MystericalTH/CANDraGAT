@@ -156,6 +156,7 @@ def main():
             mainlogger.info('No DNA Methy')
         feat_prefix = ''.join([char for char, enable in zip('mxdvD', [enable_mut, enable_expr, enable_meth, enable_cnv, enable_drug]) if enable])
         study_name=f'{modelname}:{task}:{feat_prefix}'
+        mainlogger.info(f'Study name: "{study_name}"')
 
         DatasetTest = DrugOmicsDataset(drugsens_test, omics_dataset, smiles_list, modelname, EVAL = True)
         testloader = get_dataloader(DatasetTest, modelname, batch_size=batch_size)
