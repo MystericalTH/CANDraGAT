@@ -44,7 +44,7 @@ def main():
     start_time = arrow.now()
     start_time_formatted = start_time.format('DD/MM/YYYY HH:mm:ss')
 
-    set_base_seed(42)
+    # set_base_seed(42)
     torch.backends.cudnn.deterministic = True
     
     task = args['task']
@@ -315,10 +315,11 @@ def main():
             with open(summaryfilepath, 'w') as summaryfile:
                 write_result_files(report_metrics,summaryfile)
         with open(summaryfilepath, 'a') as outfile:
-            outtext_list.insert(1,note)
-            outtext_list.insert(2,start_time_formatted)
-            outtext_list.insert(3,end_time_formatted)
-            outtext_list.insert(4,str(elapsed_time).split('.')[0])
+            outtext_list.insert(1,study_name)
+            outtext_list.insert(2,note)
+            outtext_list.insert(3,start_time_formatted)
+            outtext_list.insert(4,end_time_formatted)
+            outtext_list.insert(5,str(elapsed_time).split('.')[0])
             output_writer = csv.writer(outfile,delimiter = ',')
             output_writer.writerow(outtext_list)
     except:
