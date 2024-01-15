@@ -44,5 +44,6 @@ def Validation(validloader: DataLoader, model: MultiOmicsMolNet, metrics, modeln
 
     torch.cuda.empty_cache()
     model.train()
+    validloader.dataset.clear_drug_tensor()
 
     return scores, All_answer, All_label
