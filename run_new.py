@@ -193,14 +193,15 @@ def main():
             seed = set_seed(100)
             mainlogger.info(f'-- TRAIN SET {fold+1} --')
 
-            DatasetTrain = DrugOmicsDataset(Trainset, omics_dataset, smiles_list, modelname, EVAL = False)
-            DatasetValid = DrugOmicsDataset(Validset, omics_dataset, smiles_list, modelname, EVAL = True, root = os.path.join(RUN_DIR, f'drug-tensors-valid-{fold}'))
-            trainloader = get_dataloader(DatasetTrain, modelname, batch_size=batch_size)
-            validloader = get_dataloader(DatasetValid, modelname, batch_size=batch_size)
-
             fold_dir = os.path.join(RUN_DIR, f'fold_{fold}-seed_{seed}')
             if args['debug']:
                 os.makedirs(f'{fold_dir}/.debug/', exist_ok=True)
+                
+            DatasetTrain = DrugOmicsDataset(Trainset, omics_dataset, smiles_list, modelname, EVAL = False)
+            DatasetValid = DrugOmicsDataset(Validset, omics_dataset, smiles_list, modelname, EVAL = True, root = os.path.join(fold_dir, 'drug-tensors'))
+            trainloader = get_dataloader(DatasetTrain, modelname, batch_size=batch_size)
+            validloader = get_dataloader(DatasetValid, modelname, batch_size=batch_size)
+
             saver = Saver(fold_dir, max_epoch)
             model, optimizer = saver.LoadModel(load_all=True)
 

@@ -51,13 +51,12 @@ class TestDrugTensorDataset(OnDiskDataset):
     def __init__(self, root, transform=None, pre_transform=None):
         super().__init__(root, transform, pre_transform)
         self.schema = torch.Tensor
-        os.makedirs(self.root, exist_ok=True)
     
     def serialize(self, data):
         name = f'{len(self)}.pt'
         path = os.path.join(self.root, name)
         torch.save(data, path)
-        return path
+        return name
 
     def deserialize(self, name):
         path = os.path.join(self.root, name)
@@ -88,7 +87,7 @@ class DrugOmicsDataset(data.Dataset):
         omics_data = self.omics_dataset[cl_idx]
         
         if self.eval:
-            drug_data = self.drug_tensor_dict[drug_idx]
+            drug_data = self.test_drug_tensor_dataset.get(drug_idx)
         else:
             drug_data = self.drug_featurizer.featurize(self.drug_dataset, drug_idx)
         return [omics_data, drug_data], label
@@ -110,7 +109,7 @@ class DrugOmicsDataset(data.Dataset):
 
     def precalculate_drug_tensor(self, model: MultiOmicsMolNet):
         print("Precalculating drug tensors...", flush=True)
-        data_length = len(self.drugsens['SMILES'].unique())
+        os.makedirs(self.test_drug_tensor_dataset.root, exist_ok=True)
         model.eval().cpu()
         for drug_idx in self.drugsens['SMILES'].unique():
             drug_data = self.drug_featurizer.featurize(self.drug_dataset, int(drug_idx))
@@ -118,7 +117,7 @@ class DrugOmicsDataset(data.Dataset):
             self.test_drug_tensor_dataset.append(drug_tensor)
 
     def clear_drug_tensor(self):
-        shutil.rmtree(self.test_drug_tensor_dataset.root)
+        shutil.rmtree(self.test_drug_tensor_dataset.root, ignore_errors=True)
         self.test_drug_tensor_dataset = TestDrugTensorDataset(root = self.test_drug_tensor_dataset.root)
         gc.collect()
     
