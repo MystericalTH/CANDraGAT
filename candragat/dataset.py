@@ -8,7 +8,6 @@ from candragat.models import MultiOmicsMolNet
 import pandas as pd
 import os
 import shutil
-from torch_geometric.data import OnDiskDataset
 import gc
 
 def DrugSensTransform(drugsens_df:pd.DataFrame):
@@ -47,13 +46,21 @@ class OmicsDataset(data.Dataset):
     def input_size(self):
         return [self.mut.shape[-1], self.expr.shape[-1], self.meth.shape[-1], self.cnv.shape[-1]]
 
-class TestDrugTensorDataset(OnDiskDataset):
-    def __init__(self, root, transform=None, pre_transform=None):
-        super().__init__(root, transform, pre_transform)
-        self.schema = torch.Tensor
+class TestDrugTensorDataset(data.Dataset):
     
-    def serialize(self, data):
-        name = f'{len(self)}.pt'
+    def __init__(self, root):
+        super().__init__()
+        self.root = root
+        
+    def __len__(self):
+        return len(os.listdir(self.root)) 
+    
+    def __getitem__(self, idx):
+        name = f'{idx}.pt'
+        return self.deserialize(name)
+    
+    def serialize(self, drug_idx, data):
+        name = f'{drug_idx}.pt'
         path = os.path.join(self.root, name)
         torch.save(data, path)
         return name
@@ -62,6 +69,12 @@ class TestDrugTensorDataset(OnDiskDataset):
         path = os.path.join(self.root, name)
         tensors = torch.load(path)
         return tensors
+    
+    def save(self, drug_idx, data):
+        self.serialize(drug_idx, data)
+    
+    def get(self, idx):
+        return self.__getitem__(idx)
         
 class DrugOmicsDataset(data.Dataset):
 
@@ -114,7 +127,7 @@ class DrugOmicsDataset(data.Dataset):
         for drug_idx in self.drugsens['SMILES'].unique():
             drug_data = self.drug_featurizer.featurize(self.drug_dataset, int(drug_idx))
             drug_tensor = model.drug_nn(drug_data).mean(dim=0)
-            self.test_drug_tensor_dataset.append(drug_tensor)
+            self.test_drug_tensor_dataset.save(drug_idx, drug_tensor)
 
     def clear_drug_tensor(self):
         shutil.rmtree(self.test_drug_tensor_dataset.root, ignore_errors=True)
