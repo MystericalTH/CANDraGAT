@@ -470,6 +470,10 @@ class MultiOmicsMolNet(nn.Module):
             preout_layer = torch.cat([preout_layer,DrugTensor], dim=1)
 
         prediction = self.out(preout_layer)
+        
+        if self.args['task'] == 'clas':
+            prediction = torch.sigmoid(prediction)
+        
         return prediction
 
 
