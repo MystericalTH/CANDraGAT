@@ -6,6 +6,9 @@ from torch_geometric.loader import DataLoader as PyGDataLoader
 from candragat.utils import graph_collate_fn
 from candragat.models import MultiOmicsMolNet
 import pandas as pd
+import os
+import shutil
+import gc
 
 def DrugSensTransform(drugsens_df:pd.DataFrame):
     smiles_list = drugsens_df['SMILES'].unique().tolist()
@@ -43,9 +46,39 @@ class OmicsDataset(data.Dataset):
     def input_size(self):
         return [self.mut.shape[-1], self.expr.shape[-1], self.meth.shape[-1], self.cnv.shape[-1]]
 
+class TestDrugTensorDataset(data.Dataset):
+    
+    def __init__(self, root):
+        super().__init__()
+        self.root = root
+        
+    def __len__(self):
+        return len(os.listdir(self.root)) 
+    
+    def __getitem__(self, idx):
+        name = f'{idx}.pt'
+        return self.deserialize(name)
+    
+    def serialize(self, drug_idx, data):
+        name = f'{drug_idx}.pt'
+        path = os.path.join(self.root, name)
+        torch.save(data, path)
+        return name
+
+    def deserialize(self, name):
+        path = os.path.join(self.root, name)
+        tensors = torch.load(path)
+        return tensors
+    
+    def save(self, drug_idx, data):
+        self.serialize(drug_idx, data)
+    
+    def get(self, idx):
+        return self.__getitem__(idx)
+        
 class DrugOmicsDataset(data.Dataset):
 
-    def __init__(self, drugsens, omics_dataset, smiles_list, drug_mode: str, EVAL = False):
+    def __init__(self, drugsens, omics_dataset, smiles_list, drug_mode: str, EVAL = False, **kwargs):
         super().__init__()
         self.eval = EVAL
         self.drugsens = drugsens
@@ -55,7 +88,9 @@ class DrugOmicsDataset(data.Dataset):
         self.drug_featurizer = self.get_featurizer(drug_mode, EVAL)
         self.drug_dataset = self.drug_featurizer.prefeaturize(self.smiles_list)
         self.omics_dataset = omics_dataset
-        self.drug_tensor_dict = {}
+        if EVAL:
+            assert kwargs['root'] is not None
+            self.test_drug_tensor_dataset = TestDrugTensorDataset(root = kwargs['root'])
 
     def __getitem__(self, index):
         cl_idx, drug_idx, _label = self.drugsens.iloc[index]
@@ -65,7 +100,7 @@ class DrugOmicsDataset(data.Dataset):
         omics_data = self.omics_dataset[cl_idx]
         
         if self.eval:
-            drug_data = self.drug_tensor_dict[drug_idx]
+            drug_data = self.test_drug_tensor_dataset.get(drug_idx)
         else:
             drug_data = self.drug_featurizer.featurize(self.drug_dataset, drug_idx)
         return [omics_data, drug_data], label
@@ -86,11 +121,18 @@ class DrugOmicsDataset(data.Dataset):
             return MolFeaturizerList[drug_featurizer]
 
     def precalculate_drug_tensor(self, model: MultiOmicsMolNet):
+        print("Precalculating drug tensors...", flush=True)
+        os.makedirs(self.test_drug_tensor_dataset.root, exist_ok=True)
         model.eval().cpu()
         for drug_idx in self.drugsens['SMILES'].unique():
             drug_data = self.drug_featurizer.featurize(self.drug_dataset, int(drug_idx))
             drug_tensor = model.drug_nn(drug_data).mean(dim=0)
-            self.drug_tensor_dict[drug_idx] = drug_tensor
+            self.test_drug_tensor_dataset.save(drug_idx, drug_tensor)
+
+    def clear_drug_tensor(self):
+        shutil.rmtree(self.test_drug_tensor_dataset.root, ignore_errors=True)
+        self.test_drug_tensor_dataset = TestDrugTensorDataset(root = self.test_drug_tensor_dataset.root)
+        gc.collect()
     
 def get_dataloader(Dataset,modelname, batch_size = None):
     if Dataset.eval:

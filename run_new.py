@@ -158,7 +158,7 @@ def main():
         study_name=f'{modelname}:{task}:{feat_prefix}'
         mainlogger.info(f'Study name: "{study_name}"')
 
-        DatasetTest = DrugOmicsDataset(drugsens_test, omics_dataset, smiles_list, modelname, EVAL = True)
+        DatasetTest = DrugOmicsDataset(drugsens_test, omics_dataset, smiles_list, modelname, EVAL = True, root = os.path.join(RUN_DIR, 'drug-tensors-test'))
         testloader = get_dataloader(DatasetTest, modelname, batch_size=batch_size)
         
         mainlogger.info('Hyperparameters optimization')
@@ -168,7 +168,7 @@ def main():
                                 ['mut','expr','meth','cnv','drug']):
             study_attrs[key] = args['enable_'+feature]
         def candragat_tuning_simplified(trial):
-            return candragat_tuning(trial, drugsens_tv, omics_dataset, smiles_list, modelname, status, batch_size, mainlogger, pbarlogger, args, max_tuning_epoch)
+            return candragat_tuning(trial, drugsens_tv, omics_dataset, smiles_list, modelname, status, batch_size, mainlogger, pbarlogger, args, RUN_DIR, max_tuning_epoch)
         run_hyper_study(study_func=candragat_tuning_simplified, N_TRIALS=n_trials,hyperexpfilename=hyperexpdir+hyperexpname, study_name=study_name, study_attrs=study_attrs,result_folder=resultfolder)
         pt_param = get_best_trial(study_name, result_folder=resultfolder)
         hypertune_stop_flag = True
@@ -193,14 +193,15 @@ def main():
             seed = set_seed(100)
             mainlogger.info(f'-- TRAIN SET {fold+1} --')
 
-            DatasetTrain = DrugOmicsDataset(Trainset, omics_dataset, smiles_list, modelname, EVAL = False)
-            DatasetValid = DrugOmicsDataset(Validset, omics_dataset, smiles_list, modelname, EVAL = True)
-            trainloader = get_dataloader(DatasetTrain, modelname, batch_size=batch_size)
-            validloader = get_dataloader(DatasetValid, modelname, batch_size=batch_size)
-
             fold_dir = os.path.join(RUN_DIR, f'fold_{fold}-seed_{seed}')
             if args['debug']:
                 os.makedirs(f'{fold_dir}/.debug/', exist_ok=True)
+                
+            DatasetTrain = DrugOmicsDataset(Trainset, omics_dataset, smiles_list, modelname, EVAL = False)
+            DatasetValid = DrugOmicsDataset(Validset, omics_dataset, smiles_list, modelname, EVAL = True, root = os.path.join(fold_dir, 'drug-tensors'))
+            trainloader = get_dataloader(DatasetTrain, modelname, batch_size=batch_size)
+            validloader = get_dataloader(DatasetValid, modelname, batch_size=batch_size)
+
             saver = Saver(fold_dir, max_epoch)
             model, optimizer = saver.LoadModel(load_all=True)
 

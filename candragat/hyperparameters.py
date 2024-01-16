@@ -67,7 +67,7 @@ def get_trial_config(trial: optuna.Trial) -> Dict[str, Union[float, int]]:
     }
 
 def candragat_tuning(trial:optuna.Trial, drugsens_df, omics_dataset, smiles_list, modelname, status,
-        batch_size, mainlogger, pbarlogger, args, max_tuning_epoch: int = 5, DEVICE = torch.device("cuda:0")):
+        batch_size, mainlogger, pbarlogger, args, RUN_DIR, max_tuning_epoch: int = 5, DEVICE = torch.device("cuda:0")):
     # global trial_id
     # trial_id += 1
     mainlogger.info(f"=============== Trial {trial.number+1}/{GLOBAL_N_TRIALS} ===============")
@@ -93,7 +93,7 @@ def candragat_tuning(trial:optuna.Trial, drugsens_df, omics_dataset, smiles_list
         optimizer.zero_grad()
 
         DatasetTrain = DrugOmicsDataset(Trainset, omics_dataset, smiles_list, modelname, EVAL=False)
-        DatasetValid = DrugOmicsDataset(Validset, omics_dataset, smiles_list, modelname, EVAL=True)
+        DatasetValid = DrugOmicsDataset(Validset, omics_dataset, smiles_list, modelname, EVAL=True, root = os.path.join(RUN_DIR, 'drug-tensors'))
         trainloader = get_dataloader(DatasetTrain, modelname, batch_size=batch_size)
         validloader = get_dataloader(DatasetValid, modelname, batch_size=batch_size)
 
