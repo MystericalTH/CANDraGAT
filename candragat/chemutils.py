@@ -19,7 +19,6 @@ def GetNeiList(mol):
 
     return NeiList
 
-
 def GetAdjMat(mol):
     # Get the adjacency Matrix of the given molecule graph
     # If one node i is connected with another node j, then the element aij in the matrix is 1; 0 for otherwise.
@@ -36,7 +35,6 @@ def GetAdjMat(mol):
 
     return AdjMat
 
-
 def GetSingleBonds(mol):
     Single_bonds = list()
     for bond in mol.GetBonds():
@@ -48,7 +46,6 @@ def GetSingleBonds(mol):
                 Single_bonds.append([bond_idx, beginatom, endatom])
 
     return Single_bonds
-
 
 def GetAtomFeatures(atom):
     feature = np.zeros(72)
@@ -199,14 +196,12 @@ def GetBondFeatures(bond):
 
     return feature
 
-
 def GetMolFeatureMat(mol):
     FeatureMat = []
     for atom in mol.GetAtoms():
         feature = GetAtomFeatures(atom)
         FeatureMat.append(feature.tolist())
     return FeatureMat
-
 
 def GetMolFingerprints(SMILES, nBits):
     mol = Chem.MolFromSmiles(SMILES)

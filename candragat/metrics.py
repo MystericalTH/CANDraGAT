@@ -17,10 +17,14 @@ class BasicCriterion(object):
     def compute(self, answer, label):
         raise NotImplementedError("Base class")
     
-    def __call__(self,answer, label, requires_backward = False):
+    def __call__(self,answer, label, weight=None, requires_backward = False):
+        if weight is None:
+            result = self.compute(answer, label)
+        else:
+            result = self.compute(answer, label, weight)
         if requires_backward:
-            return self.compute(answer, label)
-        return round(self.compute(answer, label).item(), 4)
+            return result
+        return round(result.item(), 4)
     
     def __len__(self):
         return 1
@@ -39,6 +43,7 @@ class GMeans(BasicCriterion):
         return gmeans
     def __call__(self,answer, label):
         return round(self.compute(answer, label), 4)
+    
 class AUCPR(BasicCriterion):
     def __init__(self):
         super(AUCPR, self).__init__()
@@ -52,9 +57,9 @@ class AUCPR(BasicCriterion):
         aucpr_all = -np.trapz(precision,recall)
         return aucpr_all
 
-class Accuracy(BasicCriterion):                      
+class ACC(BasicCriterion):                      
     def __init__(self):
-        super(Accuracy, self).__init__()
+        super(ACC, self).__init__()
         self.name = 'Accuracy'
 
     def compute(self, answer, label):
@@ -64,9 +69,9 @@ class Accuracy(BasicCriterion):
         accuracy = binary_accuracy(answer, label)
         return accuracy
 
-class Balanced_Accuracy(BasicCriterion):                      
+class BACC(BasicCriterion):                      
     def __init__(self):
-        super(Balanced_Accuracy, self).__init__()
+        super(BACC, self).__init__()
         self.name = 'Balanced_Accuracy'
 
     def compute(self, answer, label):
@@ -102,9 +107,9 @@ class MCC(BasicCriterion):
         mcc = binary_matthews_corrcoef(answer, label)
         return mcc
 
-class Kappa(BasicCriterion):
+class KAPPA(BasicCriterion):
     def __init__(self):
-        super(Kappa, self).__init__()
+        super(KAPPA, self).__init__()
         self.name = 'Kappa'
 
     def compute(self, answer, label):
@@ -119,12 +124,14 @@ class BCE(BasicCriterion):
         super(BCE, self).__init__()
         self.name = 'BCE'
 
-    def compute(self, answer, label):
+    def compute(self, answer, label, weight=None):
         assert len(answer) == len(label)
         label = torch.Tensor(label)
         answer = torch.Tensor(answer)
-        bce = F.binary_cross_entropy(answer, label, reduction='mean')
-        return bce
+        if weight is None:
+            return F.binary_cross_entropy(answer, label, reduction='mean')
+        else:
+            return F.binary_cross_entropy(answer, label, weight=weight, reduction='mean')
 
 class F1(BasicCriterion):
     def __init__(self):
@@ -138,9 +145,9 @@ class F1(BasicCriterion):
         f1 = binary_f1_score(answer, label)
         return f1
 
-class Precision(BasicCriterion):
+class PREC(BasicCriterion):
     def __init__(self):
-        super(Precision, self).__init__()
+        super(PREC, self).__init__()
         self.name = 'Precision'
 
     def compute(self, answer, label):
@@ -150,9 +157,9 @@ class Precision(BasicCriterion):
         precision = binary_precision(answer,label)
         return precision
 
-class Recall(BasicCriterion):
+class REC(BasicCriterion):
     def __init__(self):
-        super(Recall, self).__init__()
+        super(REC, self).__init__()
         self.name = 'Recall'
 
     def compute(self, answer, label):
@@ -162,9 +169,9 @@ class Recall(BasicCriterion):
         recall = binary_recall(answer, label)
         return recall
     
-class Specificity(BasicCriterion):
+class SPEC(BasicCriterion):
     def __init__(self):
-        super(Specificity, self).__init__()
+        super(SPEC, self).__init__()
         self.name = 'Specificity'
 
     def compute(self, answer, label):

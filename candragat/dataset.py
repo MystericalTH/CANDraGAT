@@ -51,13 +51,26 @@ class TestDrugTensorDataset(data.Dataset):
     def __init__(self, root):
         super().__init__()
         self.root = root
+        self.cache = {
+            0:[-1,-1],
+            1:[-1,-1],
+            2:[-1,-1],
+            3:[-1,-1],
+            4:[-1,-1]
+        }
         
     def __len__(self):
         return len(os.listdir(self.root)) 
     
     def __getitem__(self, idx):
-        name = f'{idx}.pt'
-        return self.deserialize(name)
+        if self.cache[idx % 5][0] == idx:
+            return self.cache[idx % 5][1]
+        else:
+            name = f'{idx}.pt'
+            tensors = self.deserialize(name)
+            self.cache[idx % 5] = [idx, tensors]
+            return tensors
+            
     
     def serialize(self, drug_idx, data):
         name = f'{drug_idx}.pt'
@@ -84,16 +97,22 @@ class DrugOmicsDataset(data.Dataset):
         self.drugsens = drugsens
         self.cl_list = omics_dataset.cl_list
         self.smiles_list = smiles_list
-        self.__drug_mode = drug_mode
         self.drug_featurizer = self.get_featurizer(drug_mode, EVAL)
         self.drug_dataset = self.drug_featurizer.prefeaturize(self.smiles_list)
-        self.omics_dataset = omics_dataset
+        self.omics_dataset = omics_dataset       
         if EVAL:
             assert kwargs['root'] is not None
             self.test_drug_tensor_dataset = TestDrugTensorDataset(root = kwargs['root'])
+        if "weight" in kwargs and kwargs['weight'] is not None:
+            self.has_weight = True
+            if type(kwargs['weight']) == dict:
+                self.drugsens['weight'] = drugsens['IC50'].apply(lambda x: kwargs['weight'][x])
+        else:
+            self.has_weight = False
 
     def __getitem__(self, index):
-        cl_idx, drug_idx, _label = self.drugsens.iloc[index]
+        
+        cl_idx, drug_idx, _label = self.drugsens.iloc[index, 0:3]
         label = torch.FloatTensor([_label])
         cl_idx = int(cl_idx)
         drug_idx = int(drug_idx)
@@ -103,6 +122,9 @@ class DrugOmicsDataset(data.Dataset):
             drug_data = self.test_drug_tensor_dataset.get(drug_idx)
         else:
             drug_data = self.drug_featurizer.featurize(self.drug_dataset, drug_idx)
+        if self.has_weight:
+            weight = torch.FloatTensor([self.drugsens.iloc[index, 3]])
+            return [omics_data, drug_data], label, weight
         return [omics_data, drug_data], label
 
     def __len__(self):
@@ -126,7 +148,7 @@ class DrugOmicsDataset(data.Dataset):
         model.eval().cpu()
         for drug_idx in self.drugsens['SMILES'].unique():
             drug_data = self.drug_featurizer.featurize(self.drug_dataset, int(drug_idx))
-            drug_tensor = model.drug_nn(drug_data).mean(dim=0)
+            drug_tensor = model.drug_nn(drug_data)
             self.test_drug_tensor_dataset.save(drug_idx, drug_tensor)
 
     def clear_drug_tensor(self):

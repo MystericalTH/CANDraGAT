@@ -1,10 +1,8 @@
 import torch
-from candragat.utils import DrugInputToDevice
 import tqdm
 from candragat.utils import TqdmToLogger
 from candragat.models import MultiOmicsMolNet
 from torch.utils.data import DataLoader
-import numpy as np
 import gc
 
 def Validation(validloader: DataLoader, model: MultiOmicsMolNet, metrics, modelname, mainlogger, pbarlogger, DEVICE):
@@ -18,11 +16,10 @@ def Validation(validloader: DataLoader, model: MultiOmicsMolNet, metrics, modeln
         [ValidOmicsInput, ValidDrugInput], ValidLabel = Data
         ValidDrugInput = ValidDrugInput.to(DEVICE)
         ValidOmicsInput = [tensor.to(DEVICE) for tensor in ValidOmicsInput]
-        ValidLabel = ValidLabel.squeeze(0)
 
-        ValidOutput = model.forward_validation([ValidOmicsInput,ValidDrugInput])
+        ValidOutput = model([ValidOmicsInput,ValidDrugInput])
         
-        All_answer.append(ValidOutput.detach().cpu())
+        All_answer.append(ValidOutput.detach().cpu().squeeze(0))
         All_label.append(ValidLabel.detach())
         if ii % 10 == 0:
             del ValidOmicsInput, ValidDrugInput, Data
@@ -33,7 +30,6 @@ def Validation(validloader: DataLoader, model: MultiOmicsMolNet, metrics, modeln
     All_label = torch.cat(All_label, dim=0).squeeze()
     All_answer = All_answer.tolist()
     All_label = All_label.tolist()
-
     assert len(All_label) == len(All_answer)
 
     if len(metrics) != 1:
@@ -47,7 +43,6 @@ def Validation(validloader: DataLoader, model: MultiOmicsMolNet, metrics, modeln
         mainlogger.info(f"{metrics.name}: {result}")
 
     torch.cuda.empty_cache()
-    model.train()
     validloader.dataset.clear_drug_tensor()
 
     return scores, All_answer, All_label

@@ -20,7 +20,6 @@ class BasicFeaturizer(object):
         raise NotImplementedError(
             "Featurize function not implemented.")
 
-
 class AttentiveFPFeaturizer(BasicFeaturizer):
     def __init__(self, atom_feature_size=72, bond_feature_size=10, max_degree=5, 
                 max_frag=2, EVAL=False, Frag=True):
@@ -33,7 +32,6 @@ class AttentiveFPFeaturizer(BasicFeaturizer):
         self.eval = EVAL
         self.max_frag = max_frag
         self.Frag = Frag
-
 
     def prefeaturize(self, smiles_list):
         self.GetPad(smiles_list)

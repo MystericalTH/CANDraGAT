@@ -10,7 +10,7 @@ import numpy as np
 import json
 import os
 from argparse import ArgumentParser
-
+import pickle as pkl
 MyLogging.setGroupID('candragat')
 
 def parse_args():
@@ -21,6 +21,8 @@ def parse_args():
                         choices=model_names, help="AttentiveFP or GAT or GCN")
     parser.add_argument('--task', dest='task', default='regr',
                         action="store", help='classification or regression (default: \'regr\')', choices=['clas','regr'])
+    parser.add_argument('--data', dest='data', default='normal',
+                        action="store", help='normal, blind cell, or blind drug data (default: \'normal\')', choices=['normal','blind-cell','blind-drug'])
     parser.add_argument('--enable', dest='enable', default="mxdv", 
                         help='feature(s) to enable; \nm = mutation, x = gene expression, d = DNA methylation, \n' + 
                              'v = copy number variation')
@@ -37,7 +39,6 @@ def parse_args():
 
     return args
 
-
 def main():
     args = parse_args()
     configs = json.load(open(os.path.join("configs", args['configs']),'r'))
@@ -49,6 +50,7 @@ def main():
     
     task = args['task']
     modelname = args['modelname']
+    dataname = args['data']
     note = args['note']
 
     CPU = torch.device('cpu')
@@ -58,24 +60,14 @@ def main():
     hypertune_stop_flag = False
     
     # ---------- Setup ----------
-    mainmetric, report_metrics, prediction_task = (BCE(),[BCE(),AUROC(),AUCPR()],task) if task == 'clas' \
-                                             else (MSE(),[MSE(),RMSE(),PCC(),R2(),SRCC()],task)
+    mainmetric, report_metrics, prediction_task = (BCE(),[BCE(),AUROC(),AUCPR(),ACC(),BACC(),SPEC(),PREC(),REC(),F1(),KAPPA(),MCC(),],task) if task == 'clas' \
+                                             else (MSE(),[MSE(),RMSE(),MAE(),PCC(),R2(),SRCC()],task)
     criterion = mainmetric # NOTE must alert (changed from nn.MSELoss to mainmetric)
 
     # ------- Storage Path -------
     today_date = date.today().strftime('%Y-%m-%d')
-    if args['hyperpath'] is None:
-        hyperexpdir = f'{resultfolder}/{modelname}/hyperparameters/'
-        os.makedirs(hyperexpdir,exist_ok=True)
-        num_hyperrun = 1
-        while os.path.exists(hyperexpdir+f'{today_date}_HyperRun{num_hyperrun}.json'):
-            num_hyperrun+=1
-        else:
-            hyperexpname = f'{today_date}_HyperRun{num_hyperrun}' 
-            json.dump({},open(hyperexpdir+hyperexpname+'.json','w')) # placeholder file
-        exp_name=f'{hyperexpname}_TestRun1'
-        
-    else: 
+    pt_param = None
+    if args['hyperpath'] is not None:
         hypertune_stop_flag = True
         hyper_modelname,hyperexpname= args['hyperpath']
         hyper_jsondir = f'{resultfolder}/{hyper_modelname}/hyperparameters/{hyperexpname}.json'
@@ -84,15 +76,37 @@ def main():
         while os.path.exists(f'{resultfolder}/{modelname}/{prediction_task}/{hyperexpname}_TestRun{num_run}'):
             num_run+=1
         exp_name=f'{hyperexpname}_TestRun{num_run}'
+    elif "hp" in configs:
+        hyperexpdir = f'{resultfolder}/{modelname}/hyperparameters/'
+        os.makedirs(hyperexpdir,exist_ok=True)
+        pt_param = configs['hp']
+        num_hyperrun = 1
+        while os.path.exists(hyperexpdir+f'{today_date}_HyperRun{num_hyperrun}.json'):
+            num_hyperrun+=1
+        hyperexpname = f'{today_date}_HyperRun{num_hyperrun}' 
+        exp_name = f'{hyperexpname}_TestRun1'
+        json.dump(pt_param,open(hyperexpdir+hyperexpname+'.json','w'), indent=2) # placeholder file
+    else: 
+        hyperexpdir = f'{resultfolder}/{modelname}/hyperparameters/'
+        os.makedirs(hyperexpdir,exist_ok=True)
+        num_hyperrun = 1
+        while os.path.exists(hyperexpdir+f'{today_date}_HyperRun{num_hyperrun}.json'):
+            num_hyperrun+=1
+        else:
+            hyperexpname = f'{today_date}_HyperRun{num_hyperrun}' 
+            json.dump({},open(hyperexpdir+hyperexpname+'.json','w'), indent=2) # placeholder file
+        exp_name=f'{hyperexpname}_TestRun1'
         
     status = StatusReport(hyperexpname,hypertune_stop_flag)
     RUN_DIR = f'{resultfolder}/{modelname}/{prediction_task}/{exp_name}'
     mainlogger = MyLogging.getLogger("main", filename=f'{RUN_DIR}/main.log') 
     pbarlogger = MyLogging.getLogger('pbar', filename=f'{RUN_DIR}/pbar.log')
-        
     os.makedirs(RUN_DIR, exist_ok=True)
     status.set_run_dir(RUN_DIR)
     mainlogger.info(f'Your run directory is "{RUN_DIR}"')
+    configs["note"] = args["note"]
+    with open(os.path.join(RUN_DIR, "configs.json"), "w") as file:
+        json.dump(configs, file, indent=2)
     
     mainlogger.info(f"SLURM ID: {args['job_id']}")
     mainlogger.info(f'Start time: {start_time_formatted}')
@@ -110,15 +124,38 @@ def main():
         Mut_df = pd.read_csv(features_dir + '/' + 'Mut.csv', index_col=0, header=0) 
         Expr_df = pd.read_csv(features_dir + '/' + 'GeneExp.csv', index_col=0, header=0) 
         Meth_df = pd.read_csv(features_dir + '/' + 'Meth.csv', index_col=0, header=0) 
-        CNV_df = pd.read_csv(features_dir + '/' + 'GeneCN.csv', index_col=0, header=0) 
+        CNV_df = pd.read_csv(features_dir + '/' + 'GeneCN.csv', index_col=0, header=0)
+        
+        if dataname == 'normal':
+            _hyper_trainset = pd.read_csv(drugsens_dir + '/' + args['task'] + '/' + 'DrugSens-Trainhyper-Subsampling.csv', header=0)#.iloc[:, :3] 
+            _hyper_validset = pd.read_csv(drugsens_dir + '/' + args['task'] + '/' + 'DrugSens-Validhyper-Subsampling.csv', header=0)#.iloc[:, :3] 
+        elif dataname == 'blind-cell':
+            _hyper_trainset = pd.read_csv(drugsens_dir + '/' + args['task'] + '/' + 'DrugSens-BlindCellLine-Trainhyper-Subsampling.csv', header=0)#.iloc[:, 3:] 
+            _hyper_validset = pd.read_csv(drugsens_dir + '/' + args['task'] + '/' + 'DrugSens-BlindCellLine-Validhyper-Subsampling.csv', header=0)#.iloc[:, 3:]
+        else:
+            _hyper_trainset = pd.read_csv(drugsens_dir + '/' + args['task'] + '/' + 'DrugSens-BlindDrug-Trainhyper-Subsampling.csv', header=0)#.iloc[:, 3:] 
+            _hyper_validset = pd.read_csv(drugsens_dir + '/' + args['task'] + '/' + 'DrugSens-BlindDrug-Validhyper-Subsampling.csv', header=0)#.iloc[:, 3:]
         mainlogger.info('Omics data loaded.')
         
-        _drugsens_tv = pd.read_csv(drugsens_dir + '/' + args['task'] + '/' + "DrugSens-Train.csv", header = 0)
-        _drugsens_test = pd.read_csv(drugsens_dir + '/' + args['task'] + '/' + "DrugSens-Test.csv", header = 0)
+        if dataname == 'normal':
+            _drugsens_tv = pd.read_csv(drugsens_dir + '/' + args['task'] + '/' + "DrugSens-Train.csv", header = 0)
+            _drugsens_test = pd.read_csv(drugsens_dir + '/' + args['task'] + '/' + "DrugSens-Test.csv", header = 0)
+        elif dataname == 'blind-cell':
+            _drugsens_tv = pd.read_csv(drugsens_dir + '/' + args['task'] + '/' + "DrugSens-BlindCellLine-Train.csv", header = 0)
+            _drugsens_test = pd.read_csv(drugsens_dir + '/' + args['task'] + '/' + "DrugSens-BlindCellLine-Test.csv", header = 0)
+        else:
+            _drugsens_tv = pd.read_csv(drugsens_dir + '/' + args['task'] + '/' + "DrugSens-BlindDrug-Train.csv", header = 0)
+            _drugsens_test = pd.read_csv(drugsens_dir + '/' + args['task'] + '/' + "DrugSens-BlindDrug-Test.csv", header = 0)
+        
         smiles_list, cl_list, drugsens = DrugSensTransform(pd.concat([_drugsens_tv, _drugsens_test], axis=0))
         drugsens_tv = drugsens.iloc[:len(_drugsens_tv)]
         drugsens_test = drugsens.iloc[len(_drugsens_tv):]
+        
+        hp_smiles_list, hp_cl_list, hp_drugsens = DrugSensTransform(pd.concat([_hyper_trainset, _hyper_validset], axis=0))
+        hyper_trainset = hp_drugsens.iloc[:len(_hyper_trainset)]
+        hyper_validset = hp_drugsens.iloc[len(_hyper_trainset):]
 
+        hp_omics_dataset = OmicsDataset(hp_cl_list, mut = Mut_df, expr = Expr_df, meth = Meth_df, cnv = CNV_df)
         omics_dataset = OmicsDataset(cl_list, mut = Mut_df, expr = Expr_df, meth = Meth_df, cnv = CNV_df)
         outtext_list = [enable_mut, enable_expr, enable_meth, enable_cnv, enable_drug]
 
@@ -133,6 +170,12 @@ def main():
             mainlogger.info('-- DEBUG MODE --')
             drugsens_tv = drugsens_tv.iloc[:configs['drugsens_tv_num_items']]
             drugsens_test = drugsens_test.iloc[:configs['drugsens_test_num_items']]
+            hyper_trainset = hyper_trainset.iloc[:200]
+            hyper_validset = hyper_validset.iloc[:200]
+            mainlogger.info(f"drugsens_tv size: {len(drugsens_tv)}")
+            mainlogger.info(f"drugsens_test size: {len(drugsens_test)}")
+            mainlogger.info(f"hyper_trainset size: {len(hyper_trainset)}")
+            mainlogger.info(f"hyper_validset size: {len(hyper_validset)}")
         
         if enable_drug:
             mainlogger.info('Use Drug')
@@ -154,12 +197,19 @@ def main():
             mainlogger.info('Use DNA Methy')
         else:
             mainlogger.info('No DNA Methy')
+        
+        if args['task'] == 'clas':
+            weight_dict = pkl.load(open("data/datasets/weight_dict.pkl", "rb"))
+        else:
+            weight_dict = None
         feat_prefix = ''.join([char for char, enable in zip('mxdvD', [enable_mut, enable_expr, enable_meth, enable_cnv, enable_drug]) if enable])
-        study_name=f'{modelname}:{task}:{feat_prefix}'
+        study_name=f'{modelname}:{task}:{feat_prefix}:{dataname}'
+        data_name=f'{dataname}'
         mainlogger.info(f'Study name: "{study_name}"')
+        mainlogger.info(f'Data name: "{data_name}"')
 
         DatasetTest = DrugOmicsDataset(drugsens_test, omics_dataset, smiles_list, modelname, EVAL = True, root = os.path.join(RUN_DIR, 'drug-tensors-test'))
-        testloader = get_dataloader(DatasetTest, modelname, batch_size=batch_size)
+        testloader = get_dataloader(DatasetTest, modelname, batch_size=1)
         
         mainlogger.info('Hyperparameters optimization')
         study_attrs['model'] = modelname
@@ -167,10 +217,12 @@ def main():
         for key, feature in zip(['mutation', 'gene expression', 'DNA methylation', 'copy number variation', 'drug'], 
                                 ['mut','expr','meth','cnv','drug']):
             study_attrs[key] = args['enable_'+feature]
-        def candragat_tuning_simplified(trial):
-            return candragat_tuning(trial, drugsens_tv, omics_dataset, smiles_list, modelname, status, batch_size, mainlogger, pbarlogger, args, RUN_DIR, max_tuning_epoch)
-        run_hyper_study(study_func=candragat_tuning_simplified, N_TRIALS=n_trials,hyperexpfilename=hyperexpdir+hyperexpname, study_name=study_name, study_attrs=study_attrs,result_folder=resultfolder)
-        pt_param = get_best_trial(study_name, result_folder=resultfolder)
+        if pt_param is None:
+            def candragat_tuning_simplified(trial):
+                return candragat_tuning(trial, hyper_trainset, hyper_validset, hp_omics_dataset, hp_smiles_list, modelname, status, batch_size, mainlogger, pbarlogger, args, RUN_DIR, criterion, max_tuning_epoch, weight=weight_dict)
+            run_hyper_study(study_func=candragat_tuning_simplified, N_TRIALS=n_trials,hyperexpfilename=hyperexpdir+hyperexpname, study_name=study_name, study_attrs=study_attrs,result_folder=resultfolder)
+            pt_param = get_best_trial(study_name, result_folder=resultfolder)
+            json.dump(pt_param,open(RUN_DIR+'/hp.json','w'), indent=2)
         hypertune_stop_flag = True
         status.update({'hypertune_stop_flag':True})
 
@@ -178,7 +230,6 @@ def main():
         
         drop_rate = pt_param['drop_rate']
         lr = pt_param['lr']
-        weight_decay = pt_param['weight_decay']
         omics_output_size = pt_param['omics_output_size']
         drug_output_size = pt_param['drug_output_size']
         report_metrics_name = [metric.name for metric in report_metrics]
@@ -190,23 +241,23 @@ def main():
         for fold, (Trainset, Validset) in enumerate(df_kfold_split(drugsens_tv, n_splits=folds, seed=42),start=0): 
             mainlogger.info(f'=============== Fold {fold+1}/{folds} ===============')
 
-            seed = set_seed(100)
+            seed = set_seed()
             mainlogger.info(f'-- TRAIN SET {fold+1} --')
 
             fold_dir = os.path.join(RUN_DIR, f'fold_{fold}-seed_{seed}')
-            if args['debug']:
-                os.makedirs(f'{fold_dir}/.debug/', exist_ok=True)
+            os.makedirs(f'{fold_dir}/.debug/', exist_ok=True)
                 
-            DatasetTrain = DrugOmicsDataset(Trainset, omics_dataset, smiles_list, modelname, EVAL = False)
-            DatasetValid = DrugOmicsDataset(Validset, omics_dataset, smiles_list, modelname, EVAL = True, root = os.path.join(fold_dir, 'drug-tensors'))
+            DatasetTrain = DrugOmicsDataset(Trainset, omics_dataset, smiles_list, modelname, EVAL = False, weight=weight_dict)
+            DatasetValid = DrugOmicsDataset(Validset, omics_dataset, smiles_list, modelname, EVAL = True, root = os.path.join(fold_dir, '.drug-tensors'))
             trainloader = get_dataloader(DatasetTrain, modelname, batch_size=batch_size)
-            validloader = get_dataloader(DatasetValid, modelname, batch_size=batch_size)
+            validloader = get_dataloader(DatasetValid, modelname, batch_size=1)
 
             saver = Saver(fold_dir, max_epoch)
             model, optimizer = saver.LoadModel(load_all=True)
 
             if model is None:
                 drug_model = get_drug_model(modelname,pt_param)
+                mainlogger.info(f'{drug_model}')
                 model = MultiOmicsMolNet(
                     drug_nn=drug_model,
                     drug_output_size=drug_output_size,
@@ -217,7 +268,7 @@ def main():
                 )
                 
             if optimizer is None:
-                optimizer = optim.Adam(model.parameters(),lr=lr, weight_decay=weight_decay)
+                optimizer = optim.Adam(model.parameters(), lr=lr)
 
             torch.cuda.empty_cache()
             validloss = []
@@ -242,19 +293,24 @@ def main():
                 
                 with tqdm.tqdm(trainloader, total=len(trainloader), file=TqdmToLogger(pbarlogger,level=logging.INFO), 
                                mininterval=1, desc=f'Epoch {num_epoch}/{max_epoch} - Train') as pbar:
+                    All_answer = []
+                    All_label = []
                     for ii, Data in enumerate(pbar): 
                         if stop_flag:
                             break
                         
-
-                        [OmicsInput, DrugInput], Label = Data
+                        [OmicsInput, DrugInput], Label = Data[:2]
+                            
                         DrugInput = DrugInputToDevice(DrugInput, modelname, CUDA)
                         OmicsInput = [tensor.to(CUDA) for tensor in OmicsInput]
                             # Label = Label.squeeze(-1).to(CUDA)    # [batch, task]
                             
                         output = model([OmicsInput, DrugInput])    # [batch, output_size]
-
-                        loss = criterion(output.to(CPU), Label.to(CPU), requires_backward = True)
+                        
+                        if weight_dict is None:
+                            loss = criterion(output.to(CPU), Label.to(CPU), requires_backward = True)
+                        else:
+                            loss = criterion(output.to(CPU), Label.to(CPU), weight=Data[2], requires_backward = True)
                         
                         cum_loss += loss.detach()
 
@@ -264,6 +320,13 @@ def main():
                         if (ii+1) % 20 == 0:
                             torch.cuda.empty_cache()
                         pbar.set_postfix({'loss':loss.item()}, refresh=False)
+                        All_answer.append(output.detach().cpu())
+                        All_label.append(Label.detach())
+                    All_answer = torch.cat(All_answer, dim=0).squeeze()
+                    All_label = torch.cat(All_label, dim=0).squeeze()
+                    All_answer = All_answer.tolist()
+                    All_label = All_label.tolist()
+                    np.savez(f'{fold_dir}/.debug/epoch{num_epoch}-train-IC50.npz', predIC50=All_answer, labeledIC50=All_label)
 
                 time_end = datetime.now()
                 duration_epoch = (time_end-time_start).total_seconds()
@@ -272,8 +335,7 @@ def main():
                 mainlogger.info(f"Train loss on Epoch {num_epoch} = {trainmeanloss}")
 
                 validresult, predIC50, labeledIC50 = Validation(validloader, model, report_metrics, modelname, mainlogger, pbarlogger, CPU)
-                if args['debug']:
-                    np.savez(f'{fold_dir}/.debug/valid-epoch{num_epoch}-IC50.npz', predIC50=predIC50, labeledIC50=labeledIC50)
+                np.savez(f'{fold_dir}/.debug/epoch{num_epoch}-valid-IC50.npz', predIC50=predIC50, labeledIC50=labeledIC50)
                 validmeanloss = validresult[mainmetric.name]
 
                 mainlogger.info('===========================================================')
@@ -318,17 +380,19 @@ def main():
                 write_result_files(report_metrics,summaryfile)
         with open(summaryfilepath, 'a') as outfile:
             outtext_list.insert(1,study_name)
-            outtext_list.insert(2,note)
-            outtext_list.insert(3,start_time_formatted)
-            outtext_list.insert(4,end_time_formatted)
-            outtext_list.insert(5,str(elapsed_time).split('.')[0])
+            outtext_list.insert(2,data_name)
+            outtext_list.insert(3,note)
+            outtext_list.insert(4,start_time_formatted)
+            outtext_list.insert(5,end_time_formatted)
+            outtext_list.insert(6,str(elapsed_time).split('.')[0])
             output_writer = csv.writer(outfile,delimiter = ',')
             output_writer.writerow(outtext_list)
+        if args['debug']:
+            delete_study(study_name, result_folder=resultfolder)
     except:
         mainlogger.exception('Error occured', exc_info=True)
     mainlogger.info("Exiting at {}".format(arrow.now().format('DD/MM/YYYY HH:mm:ss')))
         
-
 if __name__ == '__main__':
     torch.cuda.empty_cache()
     main()

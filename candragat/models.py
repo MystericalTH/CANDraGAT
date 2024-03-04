@@ -20,10 +20,10 @@ def get_drug_model(modelname:str,config:dict):
         return  MolPredFragFPv8(
                 atom_feature_size=72,  # 'atom_feature_size': 39
                 bond_feature_size=10,  # 'bond_feature_size': 10
-                FP_size=150,         # 'FP_size': 150
-                atom_layers=3,     # 'atom_layers':3
-                mol_layers=2,      # 'mol_layers':2
-                DNN_layers=[256],   # 'DNNLayers':[512]
+                FP_size=200,         # 'FP_size': 150
+                atom_layers=4,     # 'atom_layers':3
+                mol_layers=3,      # 'mol_layers':2
+                DNN_layers=[512],   # 'DNNLayers':[512]
                 output_size=config['drug_output_size'],
                 drop_rate=config['drop_rate'],    # 'drop_rate':0.2
             )          # drugmodel = molpredfragfpv8
@@ -31,10 +31,10 @@ def get_drug_model(modelname:str,config:dict):
         return  MolPredAttentiveFP(
             atom_feature_size=72,  # 'atom_feature_size': 39
             bond_feature_size=10,  # 'bond_feature_size': 10
-            FP_size=150,         # 'FP_size': 150
-            atom_layers=3,     # 'atom_layers':3
-            mol_layers=2,      # 'mol_layers':2
-            DNN_layers=[256],   # 'DNNLayers':[512]
+            FP_size=200,         # 'FP_size': 150
+            atom_layers=4,     # 'atom_layers':3
+            mol_layers=3,      # 'mol_layers':2
+            DNN_layers=[512],   # 'DNNLayers':[512]
             output_size=config['drug_output_size'],
             drop_rate=config['drop_rate'],    # 'drop_rate':0.2
         )    
@@ -338,9 +338,9 @@ class MutNet(nn.Module):
 class ExprNet(nn.Module):
     def __init__(self,input_size, output_size, drop_rate):
         super().__init__()
-        self.fc1 = nn.Linear(input_size, 256)
-        self.bn = nn.BatchNorm1d(256)
-        self.fc2 = nn.Linear(256, output_size)
+        self.fc1 = nn.Linear(input_size, 512)
+        self.bn = nn.BatchNorm1d(512)
+        self.fc2 = nn.Linear(512, output_size)
         self.drop_rate = drop_rate
 
     def forward(self,Input):
@@ -352,9 +352,9 @@ class ExprNet(nn.Module):
 class CNVNet(nn.Module):
     def __init__(self,input_size, output_size, drop_rate):
         super().__init__()
-        self.fc1 = nn.Linear(input_size, 256)
-        self.bn = nn.BatchNorm1d(256)
-        self.fc2 = nn.Linear(256, output_size)
+        self.fc1 = nn.Linear(input_size, 512)
+        self.bn = nn.BatchNorm1d(512)
+        self.fc2 = nn.Linear(512, output_size)
         self.drop_rate = drop_rate
 
     def forward(self,Input):
@@ -367,9 +367,9 @@ class CNVNet(nn.Module):
 class MethNet(nn.Module):
     def __init__(self,input_size, output_size, drop_rate):
         super().__init__()
-        self.fc1 = nn.Linear(input_size, 256) #input_size = omicsdata[2].shape[1]
-        self.bn = nn.BatchNorm1d(256)
-        self.fc2 = nn.Linear(256, output_size)
+        self.fc1 = nn.Linear(input_size, 512) #input_size = omicsdata[2].shape[1]
+        self.bn = nn.BatchNorm1d(512)
+        self.fc2 = nn.Linear(512, output_size)
         self.drop_rate = drop_rate
     def forward(self,Input):
         x = F.relu(self.fc1(Input))
@@ -397,21 +397,22 @@ class MultiOmicsMolNet(nn.Module):
         self.cnv_nn = CNVNet(input_size_list[3], self.omics_output_size, drop_rate)
         self.drug_nn = drug_nn
         self.args = args
+        self.omics_final_size = self.omics_output_size * (self.args['enable_mut'] + 
+                                                          self.args['enable_expr'] + 
+                                                          self.args['enable_meth'] + 
+                                                          self.args['enable_cnv'])
 
-        self.omics_fc = nn.Sequential(
-            nn.Linear(self.omics_output_size*(self.args['enable_mut'] + self.args['enable_expr'] + self.args['enable_meth'] + self.args['enable_cnv']), 
-                        self.omics_output_size),
-            nn.LeakyReLU()
-        )
+        # self.omics_fc = nn.Sequential(
+        #     nn.Linear(self.omics_final_size, 
+        #                 self.omics_output_size),
+        #     nn.ReLU()
+        # )
 
         self.out = nn.Sequential(
-            nn.Linear(self.omics_output_size+self.drug_output_size, 100),
-            nn.LeakyReLU(),
+            nn.Linear(self.omics_final_size + self.drug_output_size, 128),
+            nn.Tanh(),
             nn.Dropout(p=drop_rate),
-            nn.Linear(100, 50),
-            nn.LeakyReLU(),
-            nn.Dropout(p=drop_rate),
-            nn.Linear(50, 1),
+            nn.Linear(128, 1),
         )
 
     def forward(self, Input):
@@ -432,48 +433,23 @@ class MultiOmicsMolNet(nn.Module):
             CNV_layer = self.cnv_nn(CNV)
             MultiOmics_layer.append(CNV_layer)
             
-        MultiOmics_layer = torch.cat(MultiOmics_layer, dim=1)
-        preout_layer = self.omics_fc(MultiOmics_layer)
-
+        preout_layer = torch.cat(MultiOmics_layer, dim=-1)
+        
         if self.args['enable_drug']:
-            Drug_layer = self.drug_nn(Drug)
-            preout_layer = torch.cat([preout_layer,Drug_layer], dim=1)
+            if self.training:
+                Drug = self.drug_nn(Drug)
+            else:
+                preout_layer = torch.stack([preout_layer]*Drug.shape[1], dim=1)
+                # print(preout_layer.shape, Drug.shape)
+            preout_layer = torch.cat([preout_layer,Drug], dim=-1)
 
         prediction = self.out(preout_layer)
 
+        if not self.training:
+            # print("before", prediction.shape)
+            prediction = prediction.mean(dim=1, keepdim=True)
+            # print("after", prediction.shape) 
         if self.args['task'] == 'clas':
             prediction = torch.sigmoid(prediction)
-
-        return prediction
-    
-    def forward_validation(self, Input):
-        [Mut, Expr, Meth, CNV], DrugTensor = Input
-        MultiOmics_layer = []
-        
-        if self.args['enable_mut']:
-            Mut_layer = self.mut_nn(Mut)
-            MultiOmics_layer.append(Mut_layer)
-        if self.args['enable_expr']:
-            Expr_layer = self.expr_nn(Expr)
-            MultiOmics_layer.append(Expr_layer)
-        if self.args['enable_meth']:
-            Meth_layer = self.meth_nn(Meth)
-            MultiOmics_layer.append(Meth_layer)
-        if self.args['enable_cnv']:
-            CNV_layer = self.cnv_nn(CNV)
-            MultiOmics_layer.append(CNV_layer)
             
-        MultiOmics_layer = torch.cat(MultiOmics_layer, dim=1)
-        preout_layer = self.omics_fc(MultiOmics_layer)
-
-        if self.args['enable_drug']:
-            preout_layer = torch.cat([preout_layer,DrugTensor], dim=1)
-
-        prediction = self.out(preout_layer)
-        
-        if self.args['task'] == 'clas':
-            prediction = torch.sigmoid(prediction)
-        
         return prediction
-
-

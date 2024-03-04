@@ -20,7 +20,6 @@ class LinearBn(nn.Module):
             x = self.act(x)
         return x
 
-
 class AttentionCalculator(nn.Module):
     def __init__(self, FP_size, droprate):
         super().__init__()
@@ -84,7 +83,6 @@ class ContextCalculator(nn.Module):
         # a context vector for each atom in each molecule.
         return context
 
-
 class FPTranser(nn.Module):
     def __init__(self, FP_size):
         super().__init__()
@@ -116,7 +114,6 @@ class FPTranser(nn.Module):
         # [batch_size, max_atom_length, max_neighbor_length, FP_size]
 
         return new_atom_FP, activated_new_atom_FP, new_neighbor_FP
-
 
 class FPInitializer(nn.Module):
     def __init__(self, atom_feature_size, bond_feature_size, FP_size):
@@ -159,7 +156,6 @@ class FPInitializer(nn.Module):
         atom_FP = F.leaky_relu(atom_FP)
 
         return atom_FP, neighbor_FP
-
 
 class FPInitializerNew(nn.Module):
     # with mixture item.
@@ -240,7 +236,6 @@ class FPInitializerNew(nn.Module):
         return atom_FP, neighbor_FP
 ###########################################################################################################
 
-
 class AttentiveFPLayer(nn.Module):
     def __init__(self, FP_size, droprate):
         super().__init__()
@@ -289,7 +284,6 @@ class AttentiveFPLayer(nn.Module):
 
 ###########################################################################################################
 
-
 class AttentiveFP_atom(nn.Module):
     def __init__(self, atom_feature_size, bond_feature_size, FP_size, layers, droprate):
         super().__init__()
@@ -316,7 +310,6 @@ class AttentiveFP_atom(nn.Module):
                 atom_FP, neighbor_FP, atom_neighbor_list)
 
         return atom_FP
-
 
 class AttentiveFP_mol(nn.Module):
     def __init__(self, layers, FP_size, droprate):

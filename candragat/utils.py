@@ -55,7 +55,7 @@ def compute_confidence_interval(data):
     return m, pm
 
 def write_result_files(report_metrics,summaryfile):
-    col = ['experiment_name','study_name','note','start_time','end_time','elapsed_time','mutation', 'gene_expression', 'methylation', 'copy_number_variation']
+    col = ['experiment_name','study_name','data_name','note','start_time','end_time','elapsed_time','mutation', 'gene_expression', 'methylation', 'copy_number_variation','drug']
     writer = csv.writer(summaryfile)
     multiheader = [(x,None) for x in col] + list(product([x.name for x in report_metrics],['mean','interval']))
     for i in range(2):
@@ -205,8 +205,8 @@ class EarlyStopController(object):
         self.LastResult = 0
         self.LowerThanMaxNum = 0
         self.DecreasingNum = 0
-        self.LowerThanMaxLimit = 5
-        self.DecreasingLimit = 3
+        self.LowerThanMaxLimit = 10
+        self.DecreasingLimit = 5
         self.TestResult = []
 
     def ShouldStop(self, score, ckpt_idx,metricname):
