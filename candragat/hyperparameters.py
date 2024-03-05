@@ -95,7 +95,7 @@ def candragat_tuning(trial:optuna.Trial, Trainset, Validset, omics_dataset, smil
     DatasetTrain = DrugOmicsDataset(Trainset, omics_dataset, smiles_list, modelname, EVAL=False, weight=weight)
     DatasetValid = DrugOmicsDataset(Validset, omics_dataset, smiles_list, modelname, EVAL=True, root = os.path.join(RUN_DIR, 'drug-tensors'))
     trainloader = get_dataloader(DatasetTrain, modelname, batch_size=batch_size)
-    validloader = get_dataloader(DatasetValid, modelname, batch_size=1)
+    validloader = get_dataloader(DatasetValid, modelname, batch_size=8)
 
     earlystopper = EarlyStopController()
     
