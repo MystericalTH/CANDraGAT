@@ -209,7 +209,7 @@ def main():
         mainlogger.info(f'Data name: "{data_name}"')
 
         DatasetTest = DrugOmicsDataset(drugsens_test, omics_dataset, smiles_list, modelname, EVAL = True, root = os.path.join(RUN_DIR, 'drug-tensors-test'))
-        testloader = get_dataloader(DatasetTest, modelname, batch_size=1)
+        testloader = get_dataloader(DatasetTest, modelname, batch_size=8)
         
         mainlogger.info('Hyperparameters optimization')
         study_attrs['model'] = modelname
@@ -250,7 +250,7 @@ def main():
             DatasetTrain = DrugOmicsDataset(Trainset, omics_dataset, smiles_list, modelname, EVAL = False, weight=weight_dict)
             DatasetValid = DrugOmicsDataset(Validset, omics_dataset, smiles_list, modelname, EVAL = True, root = os.path.join(fold_dir, '.drug-tensors'))
             trainloader = get_dataloader(DatasetTrain, modelname, batch_size=batch_size)
-            validloader = get_dataloader(DatasetValid, modelname, batch_size=1)
+            validloader = get_dataloader(DatasetValid, modelname, batch_size=8)
 
             saver = Saver(fold_dir, max_epoch)
             model, optimizer = saver.LoadModel(load_all=True)
