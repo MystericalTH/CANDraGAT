@@ -19,7 +19,7 @@ def Validation(validloader: DataLoader, model: MultiOmicsMolNet, metrics, modeln
 
         ValidOutput = model([ValidOmicsInput,ValidDrugInput])
         
-        All_answer.append(ValidOutput.detach().cpu().squeeze(0))
+        All_answer.append(ValidOutput.detach().cpu())
         All_label.append(ValidLabel.detach())
         if ii % 10 == 0:
             del ValidOmicsInput, ValidDrugInput, Data
