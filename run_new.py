@@ -334,7 +334,7 @@ def main():
                 mainlogger.info(f"Epoch duration = {duration_epoch} seconds")
                 mainlogger.info(f"Train loss on Epoch {num_epoch} = {trainmeanloss}")
 
-                validresult, predIC50, labeledIC50 = Validation(validloader, model, report_metrics, modelname, mainlogger, pbarlogger, CPU)
+                validresult, predIC50, labeledIC50 = Validation(validloader, model, report_metrics, modelname, mainlogger, pbarlogger, CUDA)
                 np.savez(f'{fold_dir}/.debug/epoch{num_epoch}-valid-IC50.npz', predIC50=predIC50, labeledIC50=labeledIC50)
                 validmeanloss = validresult[mainmetric.name]
 
@@ -347,7 +347,7 @@ def main():
 
             bestmodel = saver.LoadModel()
             mainlogger.info('TEST SET')
-            score, predIC50, labeledIC50 = Validation(testloader, bestmodel, report_metrics, modelname, mainlogger, pbarlogger, CPU)
+            score, predIC50, labeledIC50 = Validation(testloader, bestmodel, report_metrics, modelname, mainlogger, pbarlogger, CUDA)
                 
             for metric in score:
                 resultsdf.loc[fold,metric] = score[metric]
