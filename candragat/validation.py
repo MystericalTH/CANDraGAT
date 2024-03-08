@@ -5,12 +5,15 @@ from candragat.models import MultiOmicsMolNet
 from torch.utils.data import DataLoader
 import gc
 
+CPU = torch.device('cpu')
+
 def Validation(validloader: DataLoader, model: MultiOmicsMolNet, metrics, modelname, mainlogger, pbarlogger, DEVICE):
-    model.eval().to(DEVICE)
     mainlogger.info("Validating..")
     All_answer = []
     All_label = []
+    model.eval().to(CPU)
     validloader.dataset.precalculate_drug_tensor(model)
+    model.eval().to(DEVICE)
     for ii, Data in tqdm.tqdm(enumerate(validloader), total=len(validloader), file=TqdmToLogger(pbarlogger), mininterval=10, desc='Validation'):
 
         [ValidOmicsInput, ValidDrugInput], ValidLabel = Data
