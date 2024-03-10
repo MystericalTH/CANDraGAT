@@ -67,38 +67,14 @@ def main():
     # ------- Storage Path -------
     today_date = date.today().strftime('%Y-%m-%d')
     pt_param = None
-    if args['hyperpath'] is not None:
-        hypertune_stop_flag = True
-        hyper_modelname,hyperexpname= args['hyperpath']
-        hyper_jsondir = f'{resultfolder}/{hyper_modelname}/hyperparameters/{hyperexpname}.json'
-        pt_param = get_best_trial(hyper_jsondir)
-        num_run = 1
-        while os.path.exists(f'{resultfolder}/{modelname}/{prediction_task}/{hyperexpname}_TestRun{num_run}'):
-            num_run+=1
-        exp_name=f'{hyperexpname}_TestRun{num_run}'
-    elif "hp" in configs:
-        hyperexpdir = f'{resultfolder}/{modelname}/hyperparameters/'
-        os.makedirs(hyperexpdir,exist_ok=True)
-        pt_param = configs['hp']
-        num_hyperrun = 1
-        while os.path.exists(hyperexpdir+f'{today_date}_HyperRun{num_hyperrun}.json'):
-            num_hyperrun+=1
-        hyperexpname = f'{today_date}_HyperRun{num_hyperrun}' 
-        exp_name = f'{hyperexpname}_TestRun1'
-        json.dump(pt_param,open(hyperexpdir+hyperexpname+'.json','w'), indent=2) # placeholder file
-    else: 
-        hyperexpdir = f'{resultfolder}/{modelname}/hyperparameters/'
-        os.makedirs(hyperexpdir,exist_ok=True)
-        num_hyperrun = 1
-        while os.path.exists(hyperexpdir+f'{today_date}_HyperRun{num_hyperrun}.json'):
-            num_hyperrun+=1
-        else:
-            hyperexpname = f'{today_date}_HyperRun{num_hyperrun}' 
-            json.dump({},open(hyperexpdir+hyperexpname+'.json','w'), indent=2) # placeholder file
-        exp_name=f'{hyperexpname}_TestRun1'
-        
-    status = StatusReport(hyperexpname,hypertune_stop_flag)
-    RUN_DIR = f'{resultfolder}/{modelname}/{prediction_task}/{exp_name}'
+    storage = Storage(os.path.join(resultfolder, "storage.db"), logger=MyLogging.getLogger('storage', filename=f'{resultfolder}/storage.log'))
+    experiment: Experiment = storage.create_experiment()
+    experiment.set_safe_mode(False)
+    
+    RUN_DIR = experiment.run_folder
+    experiment.set_logger(MyLogging.getLogger('experiment', filename=f'{RUN_DIR}/main.log'))
+    print(RUN_DIR)
+    status = StatusReport(hypertune_stop_flag)
     mainlogger = MyLogging.getLogger("main", filename=f'{RUN_DIR}/main.log') 
     pbarlogger = MyLogging.getLogger('pbar', filename=f'{RUN_DIR}/pbar.log')
     os.makedirs(RUN_DIR, exist_ok=True)
@@ -157,8 +133,18 @@ def main():
 
         hp_omics_dataset = OmicsDataset(hp_cl_list, mut = Mut_df, expr = Expr_df, meth = Meth_df, cnv = CNV_df)
         omics_dataset = OmicsDataset(cl_list, mut = Mut_df, expr = Expr_df, meth = Meth_df, cnv = CNV_df)
-        outtext_list = [enable_mut, enable_expr, enable_meth, enable_cnv, enable_drug]
-
+        
+        experiment.add_experiment_details({
+            "model": modelname,  
+            "task": task,
+            "enable_drug": enable_drug,
+            "enable_mutation": enable_mut,
+            "enable_cnv": enable_cnv,
+            "enable_gene_expression": enable_expr,
+            "enable_methylation": enable_meth,
+            "data_study": dataname,
+        })
+        
         study_attrs = {}
         n_trials = configs['n_trials']
         max_tuning_epoch = configs['max_tuning_epoch']
@@ -204,6 +190,7 @@ def main():
             weight_dict = None
         feat_prefix = ''.join([char for char, enable in zip('mxdvD', [enable_mut, enable_expr, enable_meth, enable_cnv, enable_drug]) if enable])
         study_name=f'{modelname}:{task}:{feat_prefix}:{dataname}'
+        experiment.set_name(study_name)
         data_name=f'{dataname}'
         mainlogger.info(f'Study name: "{study_name}"')
         mainlogger.info(f'Data name: "{data_name}"')
@@ -220,20 +207,16 @@ def main():
         if pt_param is None:
             def candragat_tuning_simplified(trial):
                 return candragat_tuning(trial, hyper_trainset, hyper_validset, hp_omics_dataset, hp_smiles_list, modelname, status, batch_size, mainlogger, pbarlogger, args, RUN_DIR, criterion, max_tuning_epoch, weight=weight_dict)
-            run_hyper_study(study_func=candragat_tuning_simplified, N_TRIALS=n_trials,hyperexpfilename=hyperexpdir+hyperexpname, study_name=study_name, study_attrs=study_attrs,result_folder=resultfolder)
+            run_hyper_study(study_func=candragat_tuning_simplified, N_TRIALS=n_trials,hyperfilename=os.path.join(RUN_DIR, "hyperparameters.json"), study_name=study_name, study_attrs=study_attrs,result_folder=resultfolder)
             pt_param = get_best_trial(study_name, result_folder=resultfolder)
-            json.dump(pt_param,open(RUN_DIR+'/hp.json','w'), indent=2)
+        experiment.add_hyperparameters(pt_param)
         hypertune_stop_flag = True
         status.update({'hypertune_stop_flag':True})
-
-        outtext_list.insert(0,exp_name)
         
         drop_rate = pt_param['drop_rate']
         lr = pt_param['lr']
         omics_output_size = pt_param['omics_output_size']
         drug_output_size = pt_param['drug_output_size']
-        report_metrics_name = [metric.name for metric in report_metrics]
-        resultsdf = pd.DataFrame(columns=report_metrics_name,index=list(range(folds)))
 
         #############################
         
@@ -350,7 +333,8 @@ def main():
             score, predIC50, labeledIC50 = Validation(testloader, bestmodel, report_metrics, modelname, mainlogger, pbarlogger, CPU)
                 
             for metric in score:
-                resultsdf.loc[fold,metric] = score[metric]
+                # resultsdf.loc[fold,metric] = score[metric]
+                experiment.report_test_score(fold, metric, score[metric])
 
             traintestloss = np.array([trainloss, validloss])
             np.savetxt(fold_dir+'/traintestloss.csv', traintestloss, delimiter=',', fmt='%.5f')
@@ -360,37 +344,21 @@ def main():
             np.savetxt(f'{fold_dir}/testIC50.csv', testpredlabel, delimiter=',', fmt='%.5f')
             np.savez(f'{fold_dir}/testIC50.npz', predIC50=predIC50, labeledIC50=labeledIC50)
 
-        for col in resultsdf.columns:
-            mean, interval = compute_confidence_interval(resultsdf[col])
-            outtext_list.extend((round(mean, 4), round(interval, 4)))
-
+        # experiment.save_summary()
+        
         end_time = arrow.now()
         end_time_formatted = end_time.format('DD/MM/YYYY HH:mm:ss')
         mainlogger.info('===========================================================')
         mainlogger.info(f'Finish time: {end_time_formatted}')
-        elapsed_time = end_time - start_time
 
         mainlogger.info('Writing Output...')
-
-        resultsdf.to_csv(f'{RUN_DIR}/ExperimentSummary.csv', index=False)
-
-        summaryfilepath = f'{resultfolder}/{modelname}/{prediction_task}/ResultSummarySheet.csv'
-        if not os.path.exists(summaryfilepath):
-            with open(summaryfilepath, 'w') as summaryfile:
-                write_result_files(report_metrics,summaryfile)
-        with open(summaryfilepath, 'a') as outfile:
-            outtext_list.insert(1,study_name)
-            outtext_list.insert(2,data_name)
-            outtext_list.insert(3,note)
-            outtext_list.insert(4,start_time_formatted)
-            outtext_list.insert(5,end_time_formatted)
-            outtext_list.insert(6,str(elapsed_time).split('.')[0])
-            output_writer = csv.writer(outfile,delimiter = ',')
-            output_writer.writerow(outtext_list)
+        experiment.complete()
+        
         if args['debug']:
             delete_study(study_name, result_folder=resultfolder)
     except:
         mainlogger.exception('Error occured', exc_info=True)
+        experiment.error_handling()
     mainlogger.info("Exiting at {}".format(arrow.now().format('DD/MM/YYYY HH:mm:ss')))
         
 if __name__ == '__main__':
