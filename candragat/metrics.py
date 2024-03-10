@@ -6,7 +6,6 @@ from torchmetrics.functional.classification import binary_precision, binary_reca
 from torchmetrics.functional.regression import pearson_corrcoef, mean_absolute_error, mean_squared_error, spearman_corrcoef, r2_score
 from imblearn.metrics import geometric_mean_score
 
-# # –––––––––––– Metrics for Classification –––––––––––––
 
 class BasicCriterion(object):
 
@@ -28,6 +27,12 @@ class BasicCriterion(object):
     
     def __len__(self):
         return 1
+
+
+#########################################################
+# –––––––––––– Metrics for Classification ––––––––––––– #
+#########################################################
+
 
 class GMeans(BasicCriterion):
     def __init__(self):
@@ -180,102 +185,12 @@ class SPEC(BasicCriterion):
         answer = torch.Tensor(answer)
         specificity = binary_specificity(answer, label)
         return specificity
+    
+    
+#####################################################
+# –––––––––––– Metrics for Regression ––––––––––––– #
+#####################################################
 
-# import numpy as np
-# import torch
-# import torch.nn.functional as F
-# from scipy.stats import spearmanr
-# from sklearn.metrics import r2_score, roc_auc_score,precision_recall_curve
-# from sklearn.metrics import f1_score,precision_score,recall_score
-
-
-
-
-# class AUC(BasicCriterion):
-#     def __init__(self):
-#         super(AUC, self).__init__()
-#         self.name = 'AUC'
-
-#     def compute(self, answer, label):
-#         assert len(answer) == len(label)
-
-#         answer = np.array(answer)
-#         label = np.array(label)
-
-#         result = roc_auc_score(y_true=label, y_score=answer)
-#         return result
-
-# class AUC_PR(object):
-#     def __init__(self):
-#         super(AUC_PR, self).__init__()
-#         self.name = 'AUC_PR'
-
-#     def compute(self, answer, label):
-#         assert len(answer) == len(label)
-
-#         answer = np.array(answer)
-#         label = np.array(label)
-
-#         precision,recall,_, = precision_recall_curve(label,answer)
-#         auPR_all = -np.trapz(precision,recall)
-#         return auPR_all,4
-
-# class BCE(BasicCriterion):
-#     def __init__(self):
-#         super(BCE, self).__init__()
-#         self.name = 'BCE'
-
-#     def compute(self, answer, label):
-#         assert len(answer) == len(label)
-
-#         answer = torch.Tensor(answer)
-#         label = torch.Tensor(label)
-
-#         BCE = F.binary_cross_entropy(answer, label, reduction='mean')
-#         return BCE
-
-# class F1(BasicCriterion):
-#     def __init__(self):
-#         super(F1, self).__init__()
-#         self.name = 'F1'
-
-#     def compute(self, answer, label):
-#         assert len(answer) == len(label)
-
-#         answer = np.array(answer)
-#         label = np.array(label)
-
-#         result = f1_score(y_true=label, y_pred=answer)
-#         return result
-
-
-# class Precision(BasicCriterion):
-#     def __init__(self):
-#         super(Precision, self).__init__()
-#         self.name = 'Precision'
-
-#     def compute(self, answer, label):
-#         assert len(answer) == len(label)
-
-#         answer = np.array(answer)
-#         label = np.array(label)
-
-#         result = precision_score(y_true=label, y_pred=answer)
-#         return result
-
-# class Recall(BasicCriterion):
-#     def __init__(self):
-#         super(Recall, self).__init__()
-#         self.name = 'Recall'
-
-#     def compute(self, answer, label):
-#         assert len(answer) == len(label)
-
-#         answer = np.array(answer)
-#         label = np.array(label)
-
-#         result = recall_score(y_true=label, y_pred=answer)
-#         return result
 
 class RMSE(BasicCriterion):
     def __init__(self):
@@ -358,3 +273,28 @@ class SRCC(BasicCriterion):
         label = torch.Tensor(label)
         srcc = spearman_corrcoef(answer, label)
         return srcc
+    
+    
+classification_metrics = [
+    GMeans(),
+    AUCPR(),
+    ACC(),
+    BACC(),
+    AUROC(),
+    MCC(),
+    KAPPA(),
+    BCE(),
+    F1(),
+    PREC(),
+    REC(),
+    SPEC()
+]
+
+regression_metrics = [
+    RMSE(),
+    MAE(),
+    MSE(),
+    PCC(),
+    R2(),
+    SRCC()
+]
