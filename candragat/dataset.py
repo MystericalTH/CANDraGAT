@@ -149,7 +149,7 @@ class DrugOmicsDataset(data.Dataset):
         for drug_idx in self.drugsens['SMILES'].unique():
             drug_data = self.drug_featurizer.featurize(self.drug_dataset, int(drug_idx))
             drug_tensor = model.drug_nn(drug_data)
-            self.test_drug_tensor_dataset.save(drug_idx, drug_tensor)
+            self.test_drug_tensor_dataset.save(drug_idx, PyGData(x=drug_tensor))
 
     def clear_drug_tensor(self):
         shutil.rmtree(self.test_drug_tensor_dataset.root, ignore_errors=True)
@@ -166,10 +166,10 @@ def get_dataloader(Dataset,modelname, batch_size = None):
         batch_size = batch_size
         num_workers = 1
         drop_last = True
-    if modelname in ("AttentiveFP","FragAttentiveFP"):
+    if modelname in ("AttentiveFP"):
         return data.DataLoader(Dataset, batch_size=batch_size, num_workers=num_workers,
                                     drop_last=drop_last, worker_init_fn=np.random.seed(), pin_memory=True)
-    elif modelname in ("GAT", "GCN"):
+    elif modelname in ("FragAttentiveFP", "GAT", "GCN"):
         return PyGDataLoader(Dataset, batch_size=batch_size, num_workers=num_workers,
                                 worker_init_fn=np.random.seed(), pin_memory=True, collate_fn=graph_collate_fn)
     else:

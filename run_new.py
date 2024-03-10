@@ -209,7 +209,7 @@ def main():
         mainlogger.info(f'Data name: "{data_name}"')
 
         DatasetTest = DrugOmicsDataset(drugsens_test, omics_dataset, smiles_list, modelname, EVAL = True, root = os.path.join(RUN_DIR, 'drug-tensors-test'))
-        testloader = get_dataloader(DatasetTest, modelname, batch_size=1)
+        testloader = get_dataloader(DatasetTest, modelname, batch_size=8)
         
         mainlogger.info('Hyperparameters optimization')
         study_attrs['model'] = modelname
@@ -250,7 +250,7 @@ def main():
             DatasetTrain = DrugOmicsDataset(Trainset, omics_dataset, smiles_list, modelname, EVAL = False, weight=weight_dict)
             DatasetValid = DrugOmicsDataset(Validset, omics_dataset, smiles_list, modelname, EVAL = True, root = os.path.join(fold_dir, '.drug-tensors'))
             trainloader = get_dataloader(DatasetTrain, modelname, batch_size=batch_size)
-            validloader = get_dataloader(DatasetValid, modelname, batch_size=1)
+            validloader = get_dataloader(DatasetValid, modelname, batch_size=8)
 
             saver = Saver(fold_dir, max_epoch)
             model, optimizer = saver.LoadModel(load_all=True)
@@ -334,7 +334,7 @@ def main():
                 mainlogger.info(f"Epoch duration = {duration_epoch} seconds")
                 mainlogger.info(f"Train loss on Epoch {num_epoch} = {trainmeanloss}")
 
-                validresult, predIC50, labeledIC50 = Validation(validloader, model, report_metrics, modelname, mainlogger, pbarlogger, CPU)
+                validresult, predIC50, labeledIC50 = Validation(validloader, model, report_metrics, modelname, mainlogger, pbarlogger, CUDA)
                 np.savez(f'{fold_dir}/.debug/epoch{num_epoch}-valid-IC50.npz', predIC50=predIC50, labeledIC50=labeledIC50)
                 validmeanloss = validresult[mainmetric.name]
 
@@ -347,7 +347,7 @@ def main():
 
             bestmodel = saver.LoadModel()
             mainlogger.info('TEST SET')
-            score, predIC50, labeledIC50 = Validation(testloader, bestmodel, report_metrics, modelname, mainlogger, pbarlogger, CPU)
+            score, predIC50, labeledIC50 = Validation(testloader, bestmodel, report_metrics, modelname, mainlogger, pbarlogger, CUDA)
                 
             for metric in score:
                 resultsdf.loc[fold,metric] = score[metric]

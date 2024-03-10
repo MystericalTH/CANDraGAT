@@ -3,6 +3,7 @@ from torch import nn
 import torch.nn.functional as F
 from torch_geometric.nn import GCNConv, GATConv, global_max_pool as PyGGMaxPool
 from candragat.attentivefp import *
+from torch_scatter import segment_coo
 
 def get_drug_model(modelname:str,config:dict):  
     
@@ -416,7 +417,7 @@ class MultiOmicsMolNet(nn.Module):
         )
 
     def forward(self, Input):
-        [Mut, Expr, Meth, CNV], Drug = Input
+        [Mut, Expr, Meth, CNV], Drug_ = Input
         
         MultiOmics_layer = []
 
@@ -437,18 +438,19 @@ class MultiOmicsMolNet(nn.Module):
         
         if self.args['enable_drug']:
             if self.training:
-                Drug = self.drug_nn(Drug)
+                Drug = self.drug_nn(Drug_)
             else:
-                preout_layer = torch.stack([preout_layer]*Drug.shape[1], dim=1)
-                # print(preout_layer.shape, Drug.shape)
+                mean_idx = Drug_.batch
+                preout_layer = torch.stack(list(map(lambda x: preout_layer[x], mean_idx)))
+                Drug = Drug_.x
             preout_layer = torch.cat([preout_layer,Drug], dim=-1)
 
         prediction = self.out(preout_layer)
 
         if not self.training:
-            # print("before", prediction.shape)
-            prediction = prediction.mean(dim=1, keepdim=True)
-            # print("after", prediction.shape) 
+            print("before", prediction.shape)
+            prediction = segment_coo(prediction, mean_idx, reduce="mean")
+            print("after", prediction.shape) 
         if self.args['task'] == 'clas':
             prediction = torch.sigmoid(prediction)
             

@@ -15,6 +15,7 @@ from candragat.metrics import BCE, MSE
 from typing import Dict, Union
 
 CPU = torch.device('cpu')
+CUDA = torch.device('cuda')
 # trial_id = 0
 
 def get_best_trial(study_name, result_folder: str = "results"):
@@ -67,7 +68,7 @@ def get_trial_config(trial: optuna.Trial) -> Dict[str, Union[float, int]]:
     """
     return {
         'drop_rate': trial.suggest_float('drop_rate',0.1,0.9,step=0.05),
-        'lr': trial.suggest_categorical("lr", [1e-3, 5e-4, 1e-4, 5e-5, 1e-5]),
+        'lr': trial.suggest_categorical("lr", [5e-4, 1e-4, 5e-5, 1e-5]),
         'omics_output_size': trial.suggest_int('omics_output_size',150,500,step=50),
         'drug_output_size': trial.suggest_int('drug_output_size',150,500,step=50)
     }
@@ -95,7 +96,7 @@ def candragat_tuning(trial:optuna.Trial, Trainset, Validset, omics_dataset, smil
     DatasetTrain = DrugOmicsDataset(Trainset, omics_dataset, smiles_list, modelname, EVAL=False, weight=weight)
     DatasetValid = DrugOmicsDataset(Validset, omics_dataset, smiles_list, modelname, EVAL=True, root = os.path.join(RUN_DIR, 'drug-tensors'))
     trainloader = get_dataloader(DatasetTrain, modelname, batch_size=batch_size)
-    validloader = get_dataloader(DatasetValid, modelname, batch_size=1)
+    validloader = get_dataloader(DatasetValid, modelname, batch_size=8)
 
     earlystopper = EarlyStopController()
     
@@ -125,7 +126,7 @@ def candragat_tuning(trial:optuna.Trial, Trainset, Validset, omics_dataset, smil
         trainmseloss = (cum_loss/len(trainloader)).item()
         mainlogger.info(f"Epoch {epoch+1}/{max_tuning_epoch} - Training MSE Loss: {trainmseloss}")
         metric = BCE() if args['task']=='clas' else MSE()
-        score = Validation(validloader, model, metric, modelname, mainlogger, pbarlogger, CPU)[0]
+        score = Validation(validloader, model, metric, modelname, mainlogger, pbarlogger, DEVICE)[0]
         mainlogger.info(f"Epoch {epoch+1}/{max_tuning_epoch} - Validation {metric.name}: {score}")
         trial.report(score[metric.name], epoch)
         
