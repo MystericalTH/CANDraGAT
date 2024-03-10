@@ -70,7 +70,7 @@ def graph_collate_fn(batch):
 
 class StatusReport(object):
 
-    def __init__(self,hyperpath,hypertune_stop_flag=False, trial=0, repeat=0, fold=0, epoch=0, run_dir=None):
+    def __init__(self,hypertune_stop_flag=False, trial=0, repeat=0, fold=0, epoch=0, run_dir=None):
         self._run_dir = run_dir
         self._status = {
             'hypertune_stop_flag':hypertune_stop_flag,
@@ -78,7 +78,6 @@ class StatusReport(object):
             'repeat':repeat,
             'fold':fold,
             'epoch':epoch,
-            'hyperpath': hyperpath, # YYYY-MM-DD_HyperRunNo.
         }
 
     def set_run_dir(self,run_dir):
@@ -90,7 +89,7 @@ class StatusReport(object):
     def resume_run(cls,run_dir):
         with open(f'{run_dir}/status.json','r') as status_file:
             status = json.load(status_file)
-        return cls(status['hyperpath'],status['hypertune_stop_flag'], status['repeat'], status['fold'], status['epoch'],run_dir=run_dir)
+        return cls(status['hypertune_stop_flag'], status['repeat'], status['fold'], status['epoch'],run_dir=run_dir)
 
     def update(self,data):
         assert all(key in self._status.keys() for key in data)
@@ -261,7 +260,7 @@ class MyLogging(object):
             logger.setLevel(logging_level)
 
             fhdlr = logging.FileHandler(filename)
-            formatter = logging.Formatter("%(asctime)-15s.%(msecs)03d %(name)-15s %(levelname)-8s %(message)s",
+            formatter = logging.Formatter("%(asctime)-15s.%(msecs)03d %(name)-20s %(levelname)-8s %(message)s",
                                         "%Y-%m-%d %H:%M:%S")
             fhdlr.setFormatter(formatter)
             logger.addHandler(fhdlr)

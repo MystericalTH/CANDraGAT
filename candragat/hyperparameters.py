@@ -29,7 +29,7 @@ def get_best_trial(study_name, result_folder: str = "results"):
     best_trial_param = {k:v for k, v in study.best_trial.params.items()}
     return best_trial_param
 
-def run_hyper_study(study_func, N_TRIALS, hyperexpfilename, study_name, study_attrs, result_folder: str = "results"):
+def run_hyper_study(study_func, N_TRIALS, hyperfilename, study_name, study_attrs, result_folder: str = "results"):
     global GLOBAL_N_TRIALS
     GLOBAL_N_TRIALS = N_TRIALS
     db_path = f"sqlite:///{result_folder}/hyperparameter-tuning.db"
@@ -48,7 +48,7 @@ def run_hyper_study(study_func, N_TRIALS, hyperexpfilename, study_name, study_at
     study.optimize(study_func, n_trials=n_trials, gc_after_trial=True)
     trial = study.best_trial
     best_trial_param = {k:v for k, v in trial.params.items()}
-    with open(f'{hyperexpfilename}.json','w') as jsonfile:
+    with open(hyperfilename,'w') as jsonfile:
         json.dump(best_trial_param, jsonfile, indent=4)
     return study
 
