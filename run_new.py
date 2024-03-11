@@ -34,6 +34,7 @@ def parse_args():
     parser.add_argument("--job-id", dest="job_id", type=int, help="job id")
     parser.add_argument('--debug', default=False, action="store_true", dest='debug', help='debug file/test run')
     parser.add_argument('-l', '--load_hyper', required=False,nargs=2, dest='hyperpath', help='load hyperparameter file, enter hyperparameter directory')
+    parser.add_argument('-skip', '--skip_hyper', required=False, dest='skip_hyper', help='skip hyperparameter tuning', default=False, action="store_true")
 
     args = vars(parser.parse_args())
 
@@ -196,7 +197,7 @@ def main():
         mainlogger.info(f'Data name: "{data_name}"')
 
         DatasetTest = DrugOmicsDataset(drugsens_test, omics_dataset, smiles_list, modelname, EVAL = True, root = os.path.join(RUN_DIR, 'drug-tensors-test'))
-        testloader = get_dataloader(DatasetTest, modelname, batch_size=1)
+        testloader = get_dataloader(DatasetTest, modelname, batch_size=8)
         
         mainlogger.info('Hyperparameters optimization')
         study_attrs['model'] = modelname
@@ -205,9 +206,10 @@ def main():
                                 ['mut','expr','meth','cnv','drug']):
             study_attrs[key] = args['enable_'+feature]
         if pt_param is None:
-            def candragat_tuning_simplified(trial):
-                return candragat_tuning(trial, hyper_trainset, hyper_validset, hp_omics_dataset, hp_smiles_list, modelname, status, batch_size, mainlogger, pbarlogger, args, RUN_DIR, criterion, max_tuning_epoch, weight=weight_dict)
-            run_hyper_study(study_func=candragat_tuning_simplified, N_TRIALS=n_trials,hyperfilename=os.path.join(RUN_DIR, "hyperparameters.json"), study_name=study_name, study_attrs=study_attrs,result_folder=resultfolder)
+            if not args['skip_hyper']:
+                def candragat_tuning_simplified(trial):
+                    return candragat_tuning(trial, hyper_trainset, hyper_validset, hp_omics_dataset, hp_smiles_list, modelname, status, batch_size, mainlogger, pbarlogger, args, RUN_DIR, criterion, max_tuning_epoch, weight=weight_dict)
+                run_hyper_study(study_func=candragat_tuning_simplified, N_TRIALS=n_trials,hyperfilename=os.path.join(RUN_DIR, "hyperparameters.json"), study_name=study_name, study_attrs=study_attrs,result_folder=resultfolder)
             pt_param = get_best_trial(study_name, result_folder=resultfolder)
         experiment.add_hyperparameters(pt_param)
         hypertune_stop_flag = True
@@ -233,7 +235,7 @@ def main():
             DatasetTrain = DrugOmicsDataset(Trainset, omics_dataset, smiles_list, modelname, EVAL = False, weight=weight_dict)
             DatasetValid = DrugOmicsDataset(Validset, omics_dataset, smiles_list, modelname, EVAL = True, root = os.path.join(fold_dir, '.drug-tensors'))
             trainloader = get_dataloader(DatasetTrain, modelname, batch_size=batch_size)
-            validloader = get_dataloader(DatasetValid, modelname, batch_size=1)
+            validloader = get_dataloader(DatasetValid, modelname, batch_size=8)
 
             saver = Saver(fold_dir, max_epoch)
             model, optimizer = saver.LoadModel(load_all=True)
@@ -317,7 +319,7 @@ def main():
                 mainlogger.info(f"Epoch duration = {duration_epoch} seconds")
                 mainlogger.info(f"Train loss on Epoch {num_epoch} = {trainmeanloss}")
 
-                validresult, predIC50, labeledIC50 = Validation(validloader, model, report_metrics, modelname, mainlogger, pbarlogger, CPU)
+                validresult, predIC50, labeledIC50 = Validation(validloader, model, report_metrics, modelname, mainlogger, pbarlogger, CUDA)
                 np.savez(f'{fold_dir}/.debug/epoch{num_epoch}-valid-IC50.npz', predIC50=predIC50, labeledIC50=labeledIC50)
                 validmeanloss = validresult[mainmetric.name]
 
@@ -330,7 +332,7 @@ def main():
 
             bestmodel = saver.LoadModel()
             mainlogger.info('TEST SET')
-            score, predIC50, labeledIC50 = Validation(testloader, bestmodel, report_metrics, modelname, mainlogger, pbarlogger, CPU)
+            score, predIC50, labeledIC50 = Validation(testloader, bestmodel, report_metrics, modelname, mainlogger, pbarlogger, CUDA)
                 
             for metric in score:
                 # resultsdf.loc[fold,metric] = score[metric]
