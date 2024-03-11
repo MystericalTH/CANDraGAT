@@ -34,6 +34,7 @@ def parse_args():
     parser.add_argument("--job-id", dest="job_id", type=int, help="job id")
     parser.add_argument('--debug', default=False, action="store_true", dest='debug', help='debug file/test run')
     parser.add_argument('-l', '--load_hyper', required=False,nargs=2, dest='hyperpath', help='load hyperparameter file, enter hyperparameter directory')
+    parser.add_argument('-skip', '--skip_hyper', required=False, dest='skip_hyper', help='skip hyperparameter tuning', default=False, action="store_true")
 
     args = vars(parser.parse_args())
 
@@ -218,9 +219,10 @@ def main():
                                 ['mut','expr','meth','cnv','drug']):
             study_attrs[key] = args['enable_'+feature]
         if pt_param is None:
-            def candragat_tuning_simplified(trial):
-                return candragat_tuning(trial, hyper_trainset, hyper_validset, hp_omics_dataset, hp_smiles_list, modelname, status, batch_size, mainlogger, pbarlogger, args, RUN_DIR, criterion, max_tuning_epoch, weight=weight_dict)
-            run_hyper_study(study_func=candragat_tuning_simplified, N_TRIALS=n_trials,hyperexpfilename=hyperexpdir+hyperexpname, study_name=study_name, study_attrs=study_attrs,result_folder=resultfolder)
+            if not args['skip_hyper']:
+                def candragat_tuning_simplified(trial):
+                    return candragat_tuning(trial, hyper_trainset, hyper_validset, hp_omics_dataset, hp_smiles_list, modelname, status, batch_size, mainlogger, pbarlogger, args, RUN_DIR, criterion, max_tuning_epoch, weight=weight_dict)
+                run_hyper_study(study_func=candragat_tuning_simplified, N_TRIALS=n_trials,hyperexpfilename=hyperexpdir+hyperexpname, study_name=study_name, study_attrs=study_attrs,result_folder=resultfolder)
             pt_param = get_best_trial(study_name, result_folder=resultfolder)
             json.dump(pt_param,open(RUN_DIR+'/hp.json','w'), indent=2)
         hypertune_stop_flag = True
@@ -387,8 +389,8 @@ def main():
             outtext_list.insert(6,str(elapsed_time).split('.')[0])
             output_writer = csv.writer(outfile,delimiter = ',')
             output_writer.writerow(outtext_list)
-        if args['debug']:
-            delete_study(study_name, result_folder=resultfolder)
+        # if args['debug']:
+        #     delete_study(study_name, result_folder=resultfolder)
     except:
         mainlogger.exception('Error occured', exc_info=True)
     mainlogger.info("Exiting at {}".format(arrow.now().format('DD/MM/YYYY HH:mm:ss')))
