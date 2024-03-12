@@ -10,7 +10,7 @@ class DatabaseConnection(object):
         self._conn = None
         
     def __enter__(self):
-        self._conn = sqlite3.connect(self.db_path)
+        self._conn = sqlite3.connect(self.db_path, timeout=10, isolation_level="EXCLUSIVE")
         return self._conn.cursor()
     
     def __exit__(self, exc_type, exc_value, exc_traceback):
@@ -143,11 +143,11 @@ class Storage:
 
     def create_experiment(self):
         with self.connection as cursor:
+            cursor.execute('BEGIN EXCLUSIVE')
             res = cursor.execute(
                 "SELECT strftime('%Y-%m-%d', start_time) as start_date, COUNT(run_id_by_date) as count FROM experiments " + 
                 "WHERE start_date = strftime('%Y-%m-%d', date('now','localtime'))").fetchone()
             run_id_by_date = res[1] + 1
-            print(res, run_id_by_date)
             start_time = datetime.now()
             run_folder = f"{start_time.strftime('%Y_%m_%d')}-{run_id_by_date:03}"
             cursor.execute("INSERT INTO experiments (run_folder, run_id_by_date, start_time, run_status) VALUES (?, ?, ?, ?)", [
