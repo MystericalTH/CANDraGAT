@@ -3,6 +3,7 @@ import pandas as pd
 from datetime import datetime
 import json
 import os
+import logging
 
 class DatabaseConnection(object):
     def __init__(self, db_path) -> None:
@@ -128,6 +129,7 @@ class Experiment(object):
 
 class Storage:
     def __init__(self, db_path = "results/storage.db", logger=None):
+        logger = logger or logging.getLogger(__name__)
         logger.info("Initializing database connection at " + datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
         dirname = os.path.dirname(db_path)
         if not os.path.exists(dirname):
