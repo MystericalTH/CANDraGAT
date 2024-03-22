@@ -15,6 +15,7 @@ import logging
 import io
 import tqdm
 import time
+import scipy.stats as st
 
 def set_base_seed(seed=None):        
     random.seed(seed)
@@ -42,16 +43,17 @@ def df_train_test_split(df: pd.DataFrame, train_size=0.8) -> Sequence[pd.DataFra
     train_idx, test_idx = train_test_split(list_idx,train_size=train_size)
     return df.iloc[train_idx], df.iloc[test_idx]
 
-def compute_confidence_interval(data):
+def compute_confidence_interval(data, confidence=0.95):
     """
     Compute 95% confidence interval
     :param data: An array of mean accuracy (or mAP) across a number of sampled episodes.
     :return: the 95% confidence interval for this data.
     """
+    confidence = confidence/2+0.5
     a = 1.0 * np.array(data)
     m = np.mean(a)
     std = np.std(a)
-    pm = 1.96 * (std / np.sqrt(len(a)))
+    pm = round(st.norm.ppf(confidence),4) * (std / np.sqrt(len(a)))
     return m, pm
 
 def write_result_files(report_metrics,summaryfile):
