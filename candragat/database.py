@@ -4,6 +4,8 @@ from datetime import datetime
 import json
 import os
 import logging
+from candragat.utils import compute_confidence_interval
+from typing import Literal
 
 class DatabaseConnection(object):
     def __init__(self, db_path) -> None:
@@ -168,13 +170,13 @@ class Storage:
         os.makedirs(abs_run_folder)
         return experiment
     
-    def load_experiment_by_record(self, name):
+    def load_experiment_by_record(self, run_folder):
         with self.connection as cursor:
-            res = cursor.execute("SELECT run_id FROM experiments WHERE run_folder = ?", [name]).fetchone()
+            res = cursor.execute("SELECT run_id, name FROM experiments WHERE run_folder = ?", [run_folder]).fetchone()
             if res is None:
-                raise ValueError(f"Experiment '{name}' not found")
-            run_id = res[0]
-            experiment = Experiment(self, name, run_id)
+                raise ValueError(f"Experiment '{run_folder}' not found")
+            run_id, name = res
+            experiment = Experiment(self, run_folder, run_id, name=name)
             return experiment
     
     def report_test_score(self, run_id, fold, metric, value):
@@ -192,6 +194,26 @@ class Storage:
         
         df = pd.DataFrame(res, columns=["fold", "metric", "value"])
         return df.pivot(index="fold", columns="metric", values="value")
+    
+    def score_summary(self, task: Literal['regr', "clas"], cols="all", confidence=0.95):
+        
+        if cols not in ["all", "mean"]:
+            raise ValueError("cols must be either 'all' or 'mean'")
+        def ci(x):
+            return compute_confidence_interval(x, confidence)[1]
+        with self.connection as cur:
+            agg_func = ["mean", ci, "count"] if cols == "all" else "mean"
+            score_group = pd.DataFrame(cur.execute(f'SELECT experiments.name, test_scores.fold, test_scores.metric, test_scores.value FROM test_scores INNER JOIN experiments on experiments.run_id=test_scores.run_id WHERE test_scores.run_id IN (SELECT run_id FROM experiment_details WHERE task = "{task}")').fetchall()) \
+                .groupby([0,2]).agg({3:agg_func}).reset_index().pivot(index=0, columns=2)
+        score_group.columns = score_group.columns.droplevel(0)
+        if cols == "all":
+            col_depth = 2
+            score_group.columns = score_group.columns.swaplevel()
+        else: col_depth = 1
+        score_group = score_group.round(4)
+        score_group.index.name = None
+        score_group.columns = score_group.columns.set_names([None]*col_depth)
+        return score_group.loc[:,score_group.columns.sortlevel(0)[0].tolist()]
     
     @property
     def dirname(self):
